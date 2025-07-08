@@ -5,24 +5,30 @@ import { APIResponse } from "../helpers/apiResponse";
 const fs = require("fs");
 
 const readFile: RequestHandler = async (
-  _request: Request,
+  request: Request,
   response: Response,
   next: NextFunction
 ) => {
   try {
-    fs.readFile("./index.txt", "utf8", (err: any, data: any) => {
+    const reqBody = await request.body;
+    const { file } = reqBody;
+    let fileData = "";
+    fs.readFile(`./${file}.txt`, "utf8", (err: any, data: any) => {
       if (err) {
         console.error("Error reading file:", err);
         return;
       }
-      console.log("File content:", data);
+      fileData = data;
     });
-    APIResponse(
-      response,
-      true,
-      HTTP_STATUS.SUCCESS,
-      "Index File readed successfully..!"
-    );
+    setTimeout(() => {
+      APIResponse(
+        response,
+        true,
+        HTTP_STATUS.SUCCESS,
+        "Index File readed successfully..!",
+        fileData
+      );
+    }, 500);
   } catch (error: unknown) {
     if (error) {
       APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
@@ -33,21 +39,22 @@ const readFile: RequestHandler = async (
 };
 
 const appendFile: RequestHandler = async (
-  _request: Request,
+  request: Request,
   response: Response,
   next: NextFunction
 ) => {
   try {
+    const reqBody = await request.body;
+    const { file, content } = reqBody;
     fs.appendFile(
-      "./index.txt",
-      "\nNew content is added\n",
+      `./${file}.txt`,
+      `\n${content}\n`,
       "utf8",
       (err: any, data: any) => {
         if (err) {
           console.error("Error writing file:", err);
           return;
         }
-        console.log("Updated file content:", data);
       }
     );
     APIResponse(
@@ -66,21 +73,22 @@ const appendFile: RequestHandler = async (
 };
 
 const writeFile: RequestHandler = async (
-  _request: Request,
+  request: Request,
   response: Response,
   next: NextFunction
 ) => {
   try {
+    const reqBody = await request.body;
+    const { file, content } = reqBody;
     fs.writeFile(
-      "./index.txt",
-      "\nNew content is added\n",
+      `./${file}.txt`,
+      `${content}\n`,
       "utf8",
       (err: any, data: any) => {
         if (err) {
           console.error("Error writing file:", err);
           return;
         }
-        console.log("Replaced file content:", data);
       }
     );
     APIResponse(
@@ -99,12 +107,18 @@ const writeFile: RequestHandler = async (
 };
 
 const deleteFile: RequestHandler = async (
-  _request: Request,
+  request: Request,
   response: Response,
   next: NextFunction
 ) => {
   try {
-    fs.unlink("./index.txt");
+    const { file } = await request.query;
+    fs.unlink(`./${file}.txt`, (err: any) => {
+      if (err) {
+        console.error(err);
+        return;
+      }
+    });
     APIResponse(
       response,
       true,
@@ -121,12 +135,20 @@ const deleteFile: RequestHandler = async (
 };
 
 const renameFile: RequestHandler = async (
-  _request: Request,
+  request: Request,
   response: Response,
   next: NextFunction
 ) => {
   try {
-    fs.rename("./index.txt", "./new-file.txt");
+    const reqBody = await request.body;
+    const { oldName, newName } = reqBody;
+    fs.rename(`./${oldName}.txt`, `./${newName}.txt`, (err: any) => {
+      if (err) {
+        console.log(err);
+      } else {
+        console.log("Renamed!");
+      }
+    });
     APIResponse(
       response,
       true,
