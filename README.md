@@ -13,3 +13,5 @@ Initial NodeJs Project setup which includes:
 10. Nodemon for hot reload
 11. Bcryptjs for password hashing
 12. Typescript support
+13. Middlewares
+14. CRUD operations template
