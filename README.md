@@ -32,6 +32,7 @@ Easy setup guide, Follow along to run project locally.
 
 
   `PORT=8000`
+  
   `BASE_URL=v1/api`
 
 ### Step-4:
