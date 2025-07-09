@@ -44,3 +44,38 @@ Easy setup guide, Follow along to run project locally.
 
 ### Step-6:
 -> Access swagger by visiting at "http://localhost:8000/v1/api/api-docs".
+
+
+# Bonus Tip:
+
+If you want to add debugger to your project. Here is the file
+
+`{`
+
+`    "version": "0.2.0",`
+
+`    "configurations": [`
+
+`        {`
+
+`            "type": "node",`
+
+`            "request": "launch",`
+
+`            "name": "Launch Program",`
+
+`            "program": "${workspaceFolder}/index.ts",`
+
+`            "restart": true,`
+
+`            "runtimeExecutable": "nodemon",`
+
+`            "console": "integratedTerminal"`
+
+`        }`
+
+`    ]`
+
+`}`
+
+Create '.vscode' folder and inside it create new file with name `launch.json` and add above content.
