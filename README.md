@@ -15,3 +15,27 @@ Initial NodeJs Project setup which includes:
 12. Typescript support
 13. Middlewares
 14. CRUD operations template
+
+
+# Set-up
+
+Easy setup guide, Follow along to run project locally.
+
+### Step-1:
+-> Clone the repo using `git clone <url>` or any other option preffred.
+
+### Step-2:
+-> Install packages using `npm install` OR `npm i`.
+
+### Step-3:
+-> Create .env file in root folder with two variables.
+
+
+  `PORT=8000`
+  `BASE_URL=v1/api`
+
+### Step-4:
+-> Run the project using `npm run dev`.
+
+### Step-5:
+-> Server has been started at "http://localhost:8000".
