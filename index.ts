@@ -1,8 +1,8 @@
 import routes from "./routes";
 import express, { Express } from "express";
 import dotenv from "dotenv";
-import { errorHandler, notFound } from "./middleware/logger";
-import runStandardMiddleware from "./middleware/standard.middleware";
+import { errorHandler, notFound } from "./middlewares/logger";
+import runStandardMiddleware from "./middlewares/standard.middleware";
 
 dotenv.config();
 
