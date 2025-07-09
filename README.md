@@ -37,4 +37,4 @@ Easy setup guide, Follow along to run project locally.
 -> Run the project using `npm run dev`.
 
 ### Step-5:
--> Server has been started at "http://localhost:8000".
+-> Server has been started at "http://localhost:8000/v1/api".
