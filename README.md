@@ -15,6 +15,7 @@ Initial NodeJs Project setup which includes:
 12. Typescript support
 13. Middlewares
 14. CRUD operations template
+15. Swagger integration
 
 
 # Set-up
@@ -40,3 +41,6 @@ Easy setup guide, Follow along to run project locally.
 
 ### Step-5:
 -> Server has been started at "http://localhost:8000/v1/api".
+
+### Step-6:
+-> Access swagger by visiting at "http://localhost:8000/v1/api/api-docs".
