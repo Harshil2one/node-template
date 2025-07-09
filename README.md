@@ -28,11 +28,10 @@ Easy setup guide, Follow along to run project locally.
 -> Install packages using `npm install` OR `npm i`.
 
 ### Step-3:
--> Create .env file in root folder with two variables.
+-> Create .env file in root folder.
 
 
   `PORT=8000`
-  `BASE_URL=v1/api`
 
 ### Step-4:
 -> Run the project using `npm run dev`.
