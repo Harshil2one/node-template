@@ -1,34 +1,27 @@
-import express, { Application } from "express";
-import authRouter from "./auth.route";
-import postRouter from "./post.route";
-import fileRouter from "./file.route";
-import osRouter from "./os.route";
-import bufferRouter from "./buffer.route";
-import assertRouter from "./assert.route";
-import { APIResponse } from "../helpers/apiResponse";
-import { HTTP_STATUS } from "../enums/status.enum";
+import routes from "./routes";
+import express, { Express } from "express";
+import dotenv from "dotenv";
+import { errorHandler, notFound } from "./middlewares/logger";
+import runStandardMiddleware from "./middlewares/standard.middleware";
 
-const BASE_PATH = "/v1/api";
+dotenv.config();
 
-const appRouter = express.Router();
-appRouter.route("/").get((req, res) => {
-  APIResponse(
-    res,
-    true,
-    HTTP_STATUS.SUCCESS,
-    "Welcome to Nodejs template setup!"
-  );
+const http = require("http");
+const app: Express = express();
+const port = process.env.PORT;
+
+runStandardMiddleware(app);
+
+app.use(express.json());
+routes(app);
+
+app.use(notFound);
+app.use(errorHandler);
+
+const server = http.createServer(app);
+
+server.listen(port, () => {
+  console.log(`Server is running on port: http://localhost:${port}`);
 });
 
-export default (app: Application) => {
-  const routes = () => {
-    app.use(`${BASE_PATH}/`, appRouter);
-    app.use(`${BASE_PATH}/auth`, authRouter);
-    app.use(`${BASE_PATH}/`, postRouter);
-    app.use(`${BASE_PATH}/`, fileRouter);
-    app.use(`${BASE_PATH}/`, osRouter);
-    app.use(`${BASE_PATH}/`, bufferRouter);
-    app.use(`${BASE_PATH}/`, assertRouter);
-  };
-  routes();
-};
+export default server;
