@@ -2,21 +2,33 @@ import { Request, Response, RequestHandler, NextFunction } from "express";
 import { HTTP_STATUS } from "../enums/status.enum";
 import { APIResponse } from "../helpers/apiResponse";
 import db from "../config/db.config";
+import { IFood } from "../models/restaurants.model";
 
-const getPosts: RequestHandler = async (
-  _request: Request,
+const getFoods: RequestHandler = async (
+  request: Request,
   response: Response,
   next: NextFunction
 ) => {
   try {
-    const [posts] = await db.query("SELECT * FROM posts");
+    const [foods] = (await db.query("SELECT * FROM foods")) as unknown as [
+      IFood
+    ];
+
+    if (!foods) {
+      return APIResponse(
+        response,
+        false,
+        HTTP_STATUS.BAD_REQUEST,
+        "No Foods listed!"
+      );
+    }
 
     APIResponse(
       response,
       true,
       HTTP_STATUS.SUCCESS,
-      "Posts fetched successfully..!",
-      posts
+      "Food items fetched successfully!",
+      foods
     );
   } catch (error: unknown) {
     if (error) {
@@ -27,21 +39,24 @@ const getPosts: RequestHandler = async (
   }
 };
 
-const getPostById: RequestHandler = async (
+const getFoodById: RequestHandler = async (
   request: Request,
   response: Response,
   next: NextFunction
 ) => {
   const { id } = await request.params;
   try {
-    const [post] = await db.query("SELECT * FROM posts WHERE id = ?", id);
+    const [[food]] = (await db.query(
+      "SELECT * FROM foods WHERE id = ?",
+      id
+    )) as unknown as [[IFood]];
 
     APIResponse(
       response,
       true,
       HTTP_STATUS.SUCCESS,
-      "Post details fetched successfully..!",
-      post
+      "Food details fetched successfully!",
+      food
     );
   } catch (error: unknown) {
     if (error) {
@@ -52,19 +67,26 @@ const getPostById: RequestHandler = async (
   }
 };
 
-const createPost: RequestHandler = async (
+const createFood: RequestHandler = async (
   request: Request,
   response: Response,
   next: NextFunction
 ) => {
-  const { title, description, author, created_at } = await request.body;
+  const {
+    name,
+    image = null,
+    description,
+    price = 0,
+    type = "veg",
+    isBest = 0,
+  } = await request.body;
   try {
-    const [post]: any = await db.query(
-      "INSERT INTO posts (title, description, author, created_at) VALUES (?, ?, ?, ?)",
-      [title, description, author, created_at]
-    );
+    const [food] = (await db.query(
+      "INSERT INTO foods (name, image, description, price, ratings, ratingsCount, type, isBest) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [name, image, description, price, 0, 0, type, isBest]
+    )) as unknown as [IFood];
 
-    if (post.affectedRows === 0) {
+    if (food.affectedRows === 0) {
       APIResponse(
         response,
         false,
@@ -78,8 +100,8 @@ const createPost: RequestHandler = async (
       response,
       true,
       HTTP_STATUS.SUCCESS,
-      "Post created successfully..!",
-      post
+      "Food created successfully!",
+      food
     );
   } catch (error: unknown) {
     if (error) {
@@ -90,22 +112,28 @@ const createPost: RequestHandler = async (
   }
 };
 
-const updatePost: RequestHandler = async (
+const updateFood: RequestHandler = async (
   request: Request,
   response: Response,
   next: NextFunction
 ) => {
   const { id } = await request.params;
-  const { title, description, author, created_at } = await request.body;
+  const {
+    name,
+    image = null,
+    description,
+    price = 0,
+    type = "veg",
+    isBest = 0,
+  } = await request.body;
 
-  
   try {
-    const [post]: any = await db.query(
-      "UPDATE posts SET title = ?, description = ?, author = ?, created_at = ? WHERE id = ?",
-      [title, description, author, created_at, id]
-    );
+    const [food] = (await db.query(
+      "UPDATE foods SET name = ?, image = ?, description = ?, price = ?, type = ?, isBest = ? WHERE id = ?",
+      [name, image, description, price, type, isBest, id]
+    )) as unknown as [IFood];
 
-    if (post.affectedRows === 0) {
+    if (food.affectedRows === 0) {
       APIResponse(
         response,
         false,
@@ -119,8 +147,7 @@ const updatePost: RequestHandler = async (
       response,
       true,
       HTTP_STATUS.SUCCESS,
-      "Post details updated successfully..!",
-      post
+      "Food details updated successfully!"
     );
   } catch (error: unknown) {
     if (error) {
@@ -131,25 +158,24 @@ const updatePost: RequestHandler = async (
   }
 };
 
-const deletePostById: RequestHandler = async (
+const deleteFoodById: RequestHandler = async (
   request: Request,
   response: Response,
   next: NextFunction
 ) => {
   const { id } = await request.params;
   try {
-    const [post]: any = await db.query("DELETE FROM posts WHERE id = ?", id);
+    const [food] = (await db.query(
+      "DELETE FROM foods WHERE id = ?",
+      id
+    )) as unknown as [IFood];
 
-    if (post.affectedRows === 0) {
-      APIResponse(response, false, HTTP_STATUS.NOT_FOUND, "Post not found!");
-      return;
-    }
     APIResponse(
       response,
       true,
       HTTP_STATUS.SUCCESS,
-      "Post deleted successfully..!",
-      post
+      "Food deleted successfully!",
+      food
     );
   } catch (error: unknown) {
     if (error) {
@@ -161,9 +187,9 @@ const deletePostById: RequestHandler = async (
 };
 
 export default {
-  getPosts,
-  getPostById,
-  createPost,
-  updatePost,
-  deletePostById,
+  getFoods,
+  getFoodById,
+  createFood,
+  updateFood,
+  deleteFoodById,
 };
