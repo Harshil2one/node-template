@@ -15,3 +15,67 @@ Initial NodeJs Project setup which includes:
 12. Typescript support
 13. Middlewares
 14. CRUD operations template
+15. Swagger integration
+
+
+# Set-up
+
+Easy setup guide, Follow along to run project locally.
+
+### Step-1:
+-> Clone the repo using `git clone <url>` or any other option preffred.
+
+### Step-2:
+-> Install packages using `npm install` OR `npm i`.
+
+### Step-3:
+-> Create .env file in root folder.
+
+
+  `PORT=8000`
+  
+  `BASE_URL=v1/api`
+
+### Step-4:
+-> Run the project using `npm run dev`.
+
+### Step-5:
+-> Server has been started at "http://localhost:8000/v1/api".
+
+### Step-6:
+-> Access swagger by visiting at "http://localhost:8000/v1/api/api-docs".
+
+
+# Bonus Tip:
+
+If you want to add debugger to your project. Here is the file
+
+`{`
+
+`    "version": "0.2.0",`
+
+`    "configurations": [`
+
+`        {`
+
+`            "type": "node",`
+
+`            "request": "launch",`
+
+`            "name": "Launch Program",`
+
+`            "program": "${workspaceFolder}/index.ts",`
+
+`            "restart": true,`
+
+`            "runtimeExecutable": "nodemon",`
+
+`            "console": "integratedTerminal"`
+
+`        }`
+
+`    ]`
+
+`}`
+
+Create '.vscode' folder and inside it create new file with name `launch.json` and add above content.

@@ -19,6 +19,8 @@ const startServer = async () => {
   app.use(notFound);
   app.use(errorHandler);
 
+const server = http.createServer(app);
+
   server.listen(port, () => {
     console.log(
       `Server is running on port: http://localhost:${port}/${process.env.BASE_URL}`
