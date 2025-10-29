@@ -5,6 +5,7 @@ import { HTTP_STATUS } from "../enums/status.enum";
 import profileRouter from "./profile.route";
 import cartRouter from "./cart.route";
 import couponRouter from "./coupon.route";
+import jobsRouter from "./jobs.route";
 import orderRouter from "./order.route";
 import foodRouter from "./food.route";
 import riderRouter from "./rider.route";
@@ -36,6 +37,7 @@ export default (app: Application) => {
     app.use(`${BASE_PATH}/restaurants`, restaurantRouter);
     app.use(`${BASE_PATH}/cart`, cartRouter);
     app.use(`${BASE_PATH}/coupon`, couponRouter);
+    app.use(`${BASE_PATH}/jobs`, jobsRouter);
     app.use(`${BASE_PATH}/orders`, orderRouter);
     app.use(`${BASE_PATH}/foods`, foodRouter);
     app.use(`${BASE_PATH}/profile`, profileRouter);

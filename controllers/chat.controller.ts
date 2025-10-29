@@ -114,4 +114,39 @@ const sendMessage: RequestHandler = async (
   }
 };
 
-export default { getMessages, sendMessage };
+const restartChat: RequestHandler = async (
+    request: Request,
+    response: Response,
+    next: NextFunction
+  ) => {
+    try {
+      const { userId } = await request.params;
+      const [chat] = (await db.query("UPDATE chats SET messages = NULL WHERE userId = ?", [
+        userId,
+      ])) as unknown as [IChat];
+  
+      if (!chat) {
+        return APIResponse(
+          response,
+          false,
+          HTTP_STATUS.BAD_REQUEST,
+          "No chats found!"
+        );
+      }
+  
+      APIResponse(
+        response,
+        true,
+        HTTP_STATUS.SUCCESS,
+        "Chat restarted!",
+      );
+    } catch (error: unknown) {
+      if (error) {
+        APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+      } else {
+        return next(error);
+      }
+    }
+  };
+
+export default { getMessages, sendMessage, restartChat };
