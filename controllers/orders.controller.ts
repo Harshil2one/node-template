@@ -9,6 +9,68 @@ import { IFood, IRestaurant } from "../models/restaurants.model";
 const Razorpay = require("razorpay");
 
 const getAllOrders: RequestHandler = async (
+  _request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  try {
+    const [orders] = (await db.query("SELECT * FROM orders")) as any;
+
+    if (!orders) {
+      return APIResponse(
+        response,
+        false,
+        HTTP_STATUS.SUCCESS,
+        "No orders placed yet!"
+      );
+    }
+
+    const allFoodIds = [
+      ...new Set(orders.flatMap((order: IOrder) => order.food)),
+    ];
+
+    const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
+      allFoodIds,
+    ])) as any;
+
+    const [restaurants] = (await db.query(
+      "SELECT * FROM restaurants WHERE id IN (?)",
+      [orders.flatMap((order: IOrder) => order.restaurant)]
+    )) as any;
+
+    const enrichedOrders = orders
+      .map((order: IOrder) => {
+        const foodIds = order.food;
+        const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
+        const food = orderFoods.map((f: IFood) => ({
+          ...f,
+          count: foodIds.filter((id: number) => id === f.id).length,
+        }));
+        const restaurant = restaurants.find(
+          (r: IRestaurant) => r.id === order.restaurant
+        );
+
+        return { ...order, food, restaurant };
+      })
+      .reverse();
+
+    APIResponse(
+      response,
+      true,
+      HTTP_STATUS.SUCCESS,
+      "Orders fetched successfully!",
+      enrichedOrders
+    );
+  } catch (error: unknown) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
+const getOrdersByUser: RequestHandler = async (
   request: Request,
   response: Response,
   next: NextFunction
@@ -37,7 +99,7 @@ const getAllOrders: RequestHandler = async (
       return APIResponse(
         response,
         false,
-        HTTP_STATUS.SUCCESS,
+        HTTP_STATUS.NOT_FOUND,
         "User has no order history!"
       );
     }
@@ -87,6 +149,67 @@ const getAllOrders: RequestHandler = async (
   }
 };
 
+const getOrderByOrderId: RequestHandler = async (
+  request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  try {
+    const { orderId } = request.params;
+    const [[orders]] = (await db.query(
+      "SELECT * FROM orders WHERE order_id = ?",
+      [orderId]
+    )) as any;
+
+    if (!orders) {
+      return APIResponse(
+        response,
+        false,
+        HTTP_STATUS.NOT_FOUND,
+        "No order found!"
+      );
+    }
+
+    const allFoodIds = [...new Set(orders.food)];
+
+    const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
+      allFoodIds,
+    ])) as any;
+
+    const [restaurants] = (await db.query(
+      "SELECT * FROM restaurants WHERE id IN (?)",
+      [orders.restaurant]
+    )) as any;
+
+    const foodIds = orders.food;
+    const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
+    const enrichedOrder = {
+      ...orders,
+      food: orderFoods.map((f: IFood) => ({
+        ...f,
+        count: foodIds.filter((id: number) => id === f.id).length,
+      })),
+      restaurant: restaurants.find(
+        (r: IRestaurant) => r.id === orders.restaurant
+      ),
+    };
+
+    APIResponse(
+      response,
+      true,
+      HTTP_STATUS.SUCCESS,
+      "Order details fetched successfully!",
+      enrichedOrder
+    );
+  } catch (error: unknown) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
 const createOrder: RequestHandler = async (
   request: Request,
   response: Response,
@@ -108,7 +231,7 @@ const createOrder: RequestHandler = async (
     });
     const { id, receipt, status, created_at } = data;
     const [orderEntry] = (await db.query(
-      "INSERT INTO orders (user_id, order_id, receipt, amount, restaurant, food, status, payment_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO orders (user_id, order_id, receipt, amount, restaurant, food, payment_status, payment_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         userId,
         id,
@@ -152,7 +275,7 @@ const capturePayment: RequestHandler = async (
     process.env.RAZORPAY_KEY_SECRET === request.headers["x-razorpay-signature"]
   ) {
     const [updateOrder] = (await db.query(
-      "UPDATE orders SET status = ?, payment_id = ? WHERE order_id = ?",
+      "UPDATE orders SET payment_status = ?, payment_id = ? WHERE order_id = ?",
       ["paid", payment_id, order_id]
     )) as unknown as [IOrder];
     if (updateOrder?.affectedRows && updateOrder?.affectedRows > 0)
@@ -174,8 +297,8 @@ const capturePaymentFailure: RequestHandler = async (
     process.env.RAZORPAY_KEY_SECRET === request.headers["x-razorpay-signature"]
   ) {
     const [updateOrder] = (await db.query(
-      "UPDATE orders SET status = ?, payment_id = ? WHERE order_id = ?",
-      ["failed", payment_id, orderId]
+      "UPDATE orders SET payment_status = ?, payment_id = ?, order_status = ? WHERE order_id = ?",
+      ["failed", payment_id, 7, orderId]
     )) as unknown as [IOrder];
     if (updateOrder?.affectedRows && updateOrder?.affectedRows > 0)
       APIResponse(response, true, HTTP_STATUS.SUCCESS, "Payment Cancelled!");
@@ -210,6 +333,8 @@ const refund: RequestHandler = async (
 
 export default {
   getAllOrders,
+  getOrdersByUser,
+  getOrderByOrderId,
   createOrder,
   capturePayment,
   capturePaymentFailure,

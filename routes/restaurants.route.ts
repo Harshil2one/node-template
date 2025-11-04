@@ -15,6 +15,7 @@ const {
   bookTable,
   updateRestaurant,
   deleteRestaurantById,
+  updateRestaurantStatus,
 } = restaurantsController;
 
 restaurantRouter.param("id", checkRestaurant);
@@ -242,6 +243,8 @@ restaurantRouter.route("/:id").put(validateBody, updateRestaurant);
  *         description: Local development server
  */
 restaurantRouter.route("/:id").delete(deleteRestaurantById);
+
+restaurantRouter.route("/:id").patch(updateRestaurantStatus);
 
 // ALTERNATIVE WAY:
 // restaurantRouter.route("/").get(getRestaurants).post(validateBody, createRestaurant);

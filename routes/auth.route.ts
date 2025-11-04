@@ -4,6 +4,7 @@ import { validateToken } from "../middlewares/auth.middleware";
 const authRouter = express.Router();
 
 const {
+  getAllRoles,
   getAllUsers,
   signup,
   signin,
@@ -38,7 +39,7 @@ const {
  *                 image:
  *                    type: string
  *                    example: "dsdsaffds.jpg"
- *                 isAdmin:
+ *                 role:
  *                    type: number
  *                    example: 0
  *                 cart:
@@ -130,7 +131,7 @@ authRouter.route("/signup").post(signup);
  *                          image:
  *                              type: string
  *                              example: "dsdsaffds.jpg"
- *                          isAdmin:
+ *                          role:
  *                              type: number
  *                              example: 0
  *                          cart:
@@ -149,6 +150,8 @@ authRouter.route("/send-otp").post(sendOtpMail);
 authRouter.route("/verify-otp").post(verifyOtp);
 
 authRouter.route("/update-password").post(updatePassword);
+
+authRouter.get("/roles", getAllRoles);
 
 authRouter.use(validateToken);
 

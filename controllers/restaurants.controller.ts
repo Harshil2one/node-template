@@ -11,13 +11,19 @@ const getRestaurants: RequestHandler = async (
   next: NextFunction
 ) => {
   try {
-    const { filter, mode, type, search } = request.query;
+    const { filter, mode, type, search, created_by, requests } = request.query;
     const filters = filter
       ?.toString()
       ?.split(",")
       .map((item) => item.trim());
     let restaurants: any = [];
-    if (mode && !filter) {
+    if (created_by) {
+      const [rows] = await db.query(
+        "SELECT * FROM restaurants WHERE created_by = ?",
+        [created_by]
+      );
+      restaurants = rows;
+    } else if (mode && !filter) {
       const [rows] = await db.query(
         "SELECT * FROM restaurants WHERE mode = ?",
         [mode]
@@ -92,7 +98,8 @@ const getRestaurants: RequestHandler = async (
             r.id AS restaurantId,
             r.name AS restaurantName,
             r.time,
-            r.images AS restaurantImages
+            r.images AS restaurantImages,
+            r.open AS open
           FROM foods f
           JOIN restaurants r ON JSON_CONTAINS(r.food, CAST(f.id AS JSON), '$')
           WHERE LOWER(f.name) LIKE LOWER(?) OR LOWER(f.description) LIKE LOWER(?)
@@ -104,6 +111,12 @@ const getRestaurants: RequestHandler = async (
       const [rows] = await db.query(
         "SELECT * FROM restaurants WHERE JSON_SEARCH(LOWER(special), 'one', LOWER(?)) IS NOT NULL",
         [`%${search}%`]
+      );
+      restaurants = rows;
+    } else if (requests) {
+      const [rows] = await db.query(
+        "SELECT * FROM restaurants WHERE status = ?",
+        [requests]
       );
       restaurants = rows;
     } else {
@@ -221,7 +234,7 @@ const createRestaurant: RequestHandler = async (
   } = await request.body;
   try {
     const [restaurant] = (await db.query(
-      "INSERT INTO restaurants (name, images, address, email, contact, time, distance, ratings, rate, special, mode, food, type, offers, bankOffers, isSpecial) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO restaurants (name, images, address, email, contact, time, distance, ratings, rate, special, mode, food, type, offers, bankOffers, isSpecial, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         name,
         JSON.stringify(images),
@@ -239,6 +252,7 @@ const createRestaurant: RequestHandler = async (
         JSON.stringify(offers),
         bankOffers,
         isSpecial,
+        "pending",
       ]
     )) as unknown as [IRestaurant];
 
@@ -304,11 +318,17 @@ const bookTable: RequestHandler = async (
       return;
     }
 
+    const testAccount = await nodemailer.createTestAccount();
+
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      // service: "gmail",
+      host: "smtp.ethereal.email",
+      port: 587,
       auth: {
-        user: "bigbite.0110@gmail.com",
-        pass: "kseb rvrh avds cuib",
+        // user: "bigbite.0110@gmail.com",
+        // pass: "kseb rvrh avds cuib",
+        user: testAccount.user,
+        pass: testAccount.pass,
       },
     });
 
@@ -474,6 +494,45 @@ const deleteRestaurantById: RequestHandler = async (
   }
 };
 
+const updateRestaurantStatus: RequestHandler = async (
+  request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  const { id } = await request.params;
+  const { status } = await request.body;
+
+  try {
+    const [restaurant] = (await db.query(
+      "UPDATE restaurants SET status = ? WHERE id = ?",
+      [status, id]
+    )) as unknown as [IRestaurant];
+
+    if (restaurant.affectedRows === 0) {
+      APIResponse(
+        response,
+        false,
+        HTTP_STATUS.INTERNAL_SERVER,
+        "Something wrong happened!"
+      );
+      return;
+    }
+
+    APIResponse(
+      response,
+      true,
+      HTTP_STATUS.SUCCESS,
+      "Restaurant status updated successfully!"
+    );
+  } catch (error: unknown) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
 export default {
   getRestaurants,
   getRestaurantById,
@@ -482,4 +541,5 @@ export default {
   bookTable,
   updateRestaurant,
   deleteRestaurantById,
+  updateRestaurantStatus,
 };

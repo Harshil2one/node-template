@@ -4,7 +4,6 @@ export interface IUser {
   email: string;
   contact: string;
   password: string;
-  isAdmin: boolean;
   image: string;
   cart: { restaurant: number; food: number[] };
   address: {
@@ -14,5 +13,11 @@ export interface IUser {
     state: string;
     pin: string;
   };
+  readonly role: number;
   affectedRows?: number;
+}
+
+export interface IRole {
+  readonly id: number;
+  role: string;
 }

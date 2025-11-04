@@ -2,6 +2,7 @@ import { RESTAURANT_MODE, RESTAURANT_TYPE } from "../enums/restaurants.enum";
 
 export interface IRestaurant {
   id: number;
+  open: number;
   name: string;
   images: string[];
   address: string;

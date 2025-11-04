@@ -5,6 +5,8 @@ const orderRouter = express.Router();
 
 const {
   getAllOrders,
+  getOrdersByUser,
+  getOrderByOrderId,
   createOrder,
   capturePayment,
   capturePaymentFailure,
@@ -13,7 +15,11 @@ const {
 
 orderRouter.use(validateToken);
 
-orderRouter.route("/:userId").get(getAllOrders);
+orderRouter.route("/").get(getAllOrders);
+
+orderRouter.route("/:userId").get(getOrdersByUser);
+
+orderRouter.route("/status/:orderId").get(getOrderByOrderId);
 
 orderRouter.route("/createOrder").post(createOrder);
 

@@ -11,16 +11,13 @@ const port = process.env.PORT;
 
 runStandardMiddleware(app);
 
-const server = http.createServer(app);
-
 const startServer = async () => {
   routes(app);
 
   app.use(notFound);
   app.use(errorHandler);
 
-const server = http.createServer(app);
-
+  const server = http.createServer(app);
   server.listen(port, () => {
     console.log(
       `Server is running on port: http://localhost:${port}/${process.env.BASE_URL}`

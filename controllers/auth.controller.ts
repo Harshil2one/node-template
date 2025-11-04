@@ -3,7 +3,7 @@ import { HTTP_STATUS } from "../enums/status.enum";
 import { APIResponse } from "../helpers/apiResponse";
 import bcryptjs from "bcryptjs";
 import db from "../config/db.config";
-import { IUser } from "../models/auth.model";
+import { IRole, IUser } from "../models/auth.model";
 const { exec } = require("child_process");
 const util = require("util");
 const jwt = require("jsonwebtoken");
@@ -55,6 +55,41 @@ async function run() {
 }
 run().catch((err) => console.error(err));
 
+const getAllRoles: RequestHandler = async (
+  request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  try {
+    const [roles] = (await db.query(
+      "SELECT * FROM roles",
+    )) as unknown as [IRole];
+
+    if (!roles) {
+      return APIResponse(
+        response,
+        false,
+        HTTP_STATUS.BAD_REQUEST,
+        "No roles available!"
+      );
+    }
+
+    APIResponse(
+      response,
+      true,
+      HTTP_STATUS.SUCCESS,
+      "Roles fetched successfully!",
+      roles
+    );
+  } catch (error: unknown) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
 const getAllUsers: RequestHandler = async (
   request: Request,
   response: Response,
@@ -99,7 +134,7 @@ const signup: RequestHandler = async (
 ) => {
   try {
     const reqBody = await request.body;
-    const { name, email, password } = reqBody;
+    const { name, email, password, role } = reqBody;
     const [[user]] = (await db.query("SELECT * FROM users WHERE email = ?", [
       email,
     ])) as unknown as [[IUser]];
@@ -112,8 +147,8 @@ const signup: RequestHandler = async (
     const hashedPassword = await bcryptjs.hash(password, 12);
 
     const [userCreated] = (await db.query(
-      "INSERT INTO users (name, email, password, image, isAdmin, cart) VALUES (?, ?, ?, ?, ?, ?)",
-      [name, email, hashedPassword, "", false, "[]"]
+      "INSERT INTO users (name, email, password, image, cart, role) VALUES (?, ?, ?, ?, ?, ?)",
+      [name, email, hashedPassword, "", "[]", role]
     )) as unknown as [IUser];
 
     if (!userCreated) {
@@ -177,8 +212,8 @@ const signin: RequestHandler = async (
       name: user.name,
       email: user.email,
       contact: user.contact,
-      isAdmin: user.isAdmin ? true : false,
       address: user.address,
+      role: user.role,
     };
 
     const options: any = {
@@ -237,16 +272,22 @@ const sendOtpMail: RequestHandler = async (
       return;
     }
 
+    const testAccount = await nodemailer.createTestAccount();
+
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      // service: "gmail",
+      host: "smtp.ethereal.email",
+      port: 587,
       auth: {
-        user: "bigbite.0110@gmail.com",
-        pass: "kseb rvrh avds cuib",
+        // user: "bigbite.0110@gmail.com",
+        // pass: "kseb rvrh avds cuib",
+        user: testAccount.user,
+        pass: testAccount.pass,
       },
     });
 
     (async () => {
-      await transporter.sendMail({
+      const info = await transporter.sendMail({
         from: '"Big Bite" <bigbite.0110@gmail.com>',
         to: email,
         subject: "🔐 Verify Your Email - Bigbite",
@@ -283,6 +324,7 @@ const sendOtpMail: RequestHandler = async (
   </div>
   `,
       });
+      console.log(info);
 
       APIResponse(
         response,
@@ -485,6 +527,7 @@ const sendMonitoringDetails: RequestHandler = async (
 };
 
 export default {
+  getAllRoles,
   getAllUsers,
   signup,
   signin,
