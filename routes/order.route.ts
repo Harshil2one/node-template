@@ -7,7 +7,10 @@ const {
   getAllOrders,
   getOrdersByUser,
   getOrderByOrderId,
+  getOrdersByRestaurant,
+  updateOrderStatus,
   createOrder,
+  cancelOrder,
   capturePayment,
   capturePaymentFailure,
   refund,
@@ -21,7 +24,13 @@ orderRouter.route("/:userId").get(getOrdersByUser);
 
 orderRouter.route("/status/:orderId").get(getOrderByOrderId);
 
+orderRouter.route("/restaurant/:restaurantId").get(getOrdersByRestaurant);
+
+orderRouter.route("/update-status").post(updateOrderStatus);
+
 orderRouter.route("/createOrder").post(createOrder);
+
+orderRouter.route("/cancel/:id").get(cancelOrder);
 
 orderRouter.route("/capturePayment").post(capturePayment);
 

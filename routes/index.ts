@@ -11,6 +11,7 @@ import foodRouter from "./food.route";
 import riderRouter from "./rider.route";
 import chatRouter from "./chat.route";
 import footerRouter from "./footer.route";
+import csvRouter from "./csv.route";
 
 const swaggerUI = require("swagger-ui-express");
 const swaggerConfig = require("../config/swagger.config");
@@ -44,6 +45,7 @@ export default (app: Application) => {
     app.use(`${BASE_PATH}/riders`, riderRouter);
     app.use(`${BASE_PATH}/chat`, chatRouter);
     app.use(`${BASE_PATH}/custom`, footerRouter);
+    app.use(`${BASE_PATH}/csv`, csvRouter);
   };
   routes();
 };

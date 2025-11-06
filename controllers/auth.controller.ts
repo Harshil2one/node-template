@@ -61,9 +61,9 @@ const getAllRoles: RequestHandler = async (
   next: NextFunction
 ) => {
   try {
-    const [roles] = (await db.query(
-      "SELECT * FROM roles",
-    )) as unknown as [IRole];
+    const [roles] = (await db.query("SELECT * FROM roles")) as unknown as [
+      IRole
+    ];
 
     if (!roles) {
       return APIResponse(
@@ -380,7 +380,7 @@ const verifyOtp: RequestHandler = async (
         response,
         false,
         HTTP_STATUS.BAD_REQUEST,
-        "OTP must match with email!"
+        "OTP must be match!"
       );
       return;
     }

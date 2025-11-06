@@ -11,6 +11,7 @@ const {
   getRestaurants,
   getRestaurantById,
   getRestaurantFood,
+  getOwnerDashboardData,
   createRestaurant,
   bookTable,
   updateRestaurant,
@@ -125,6 +126,8 @@ restaurantRouter.route("/:id").get(getRestaurantById);
  *         description: Local development server
  */
 restaurantRouter.route("/food/:id").get(getRestaurantFood);
+
+restaurantRouter.route("/get-dashboard-details/:id").get(getOwnerDashboardData);
 
 restaurantRouter.use(validateToken);
 

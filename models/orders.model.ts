@@ -1,3 +1,5 @@
+import { ORDER_STATUS } from "../enums/restaurants.enum";
+
 export interface IOrder {
     id: string;
     user_id: number;
@@ -9,6 +11,7 @@ export interface IOrder {
     created_at: number;
     restaurant: number;
     food: number[];
+    order_status: ORDER_STATUS;
     affectedRows?: number;
   }
   

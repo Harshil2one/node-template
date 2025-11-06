@@ -5,6 +5,7 @@ import db from "../config/db.config";
 import { IOrder } from "../models/orders.model";
 import { IUser } from "../models/auth.model";
 import { IFood, IRestaurant } from "../models/restaurants.model";
+import { ORDER_STATUS } from "../enums/restaurants.enum";
 
 const Razorpay = require("razorpay");
 
@@ -91,9 +92,10 @@ const getOrdersByUser: RequestHandler = async (
       );
     }
 
-    const [orders] = (await db.query("SELECT * FROM orders WHERE user_id = ?", [
-      userId,
-    ])) as any;
+    const [orders] = (await db.query(
+      "SELECT * FROM orders WHERE user_id = ? AND (order_status = ? OR order_status = ?) ORDER BY id DESC",
+      [userId, ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED]
+    )) as any;
 
     if (!orders) {
       return APIResponse(
@@ -117,21 +119,19 @@ const getOrdersByUser: RequestHandler = async (
       [orders.flatMap((order: IOrder) => order.restaurant)]
     )) as any;
 
-    const enrichedOrders = orders
-      .map((order: IOrder) => {
-        const foodIds = order.food;
-        const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
-        const food = orderFoods.map((f: IFood) => ({
-          ...f,
-          count: foodIds.filter((id: number) => id === f.id).length,
-        }));
-        const restaurant = restaurants.find(
-          (r: IRestaurant) => r.id === order.restaurant
-        );
+    const enrichedOrders = orders.map((order: IOrder) => {
+      const foodIds = order.food;
+      const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
+      const food = orderFoods.map((f: IFood) => ({
+        ...f,
+        count: foodIds.filter((id: number) => id === f.id).length,
+      }));
+      const restaurant = restaurants.find(
+        (r: IRestaurant) => r.id === order.restaurant
+      );
 
-        return { ...order, food, restaurant };
-      })
-      .reverse();
+      return { ...order, food, restaurant };
+    });
 
     APIResponse(
       response,
@@ -210,6 +210,114 @@ const getOrderByOrderId: RequestHandler = async (
   }
 };
 
+const getOrdersByRestaurant: RequestHandler = async (
+  request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  try {
+    const { restaurantId } = request.params;
+
+    const [orders] = (await db.query(
+      "SELECT * FROM orders WHERE restaurant = ? AND payment_status = ? AND (order_status = ? OR order_status = ? OR order_status = ?) ORDER BY id DESC",
+      [
+        restaurantId,
+        "paid",
+        ORDER_STATUS.ORDER_PLACED,
+        ORDER_STATUS.PREPARING,
+        ORDER_STATUS.READY_FOR_PICKUP,
+      ]
+    )) as any;
+
+    if (!orders) {
+      return APIResponse(
+        response,
+        false,
+        HTTP_STATUS.NOT_FOUND,
+        "No order requests are placed!"
+      );
+    }
+
+    const allFoodIds = [
+      ...new Set(orders.flatMap((order: IOrder) => order.food)),
+    ];
+
+    const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
+      allFoodIds,
+    ])) as any;
+
+    const [restaurants] = (await db.query(
+      "SELECT * FROM restaurants WHERE id = ?",
+      restaurantId
+    )) as any;
+
+    const enrichedOrders = orders.map((order: IOrder) => {
+      const foodIds = order.food;
+      const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
+      const food = orderFoods.map((f: IFood) => ({
+        ...f,
+        count: foodIds.filter((id: number) => id === f.id).length,
+      }));
+      const restaurant = restaurants.find(
+        (r: IRestaurant) => r.id === order.restaurant
+      );
+
+      return { ...order, food, restaurant };
+    });
+
+    APIResponse(
+      response,
+      true,
+      HTTP_STATUS.SUCCESS,
+      "Order requests fetched successfully!",
+      enrichedOrders
+    );
+  } catch (error: unknown) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
+const updateOrderStatus: RequestHandler = async (
+  request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  const { orderId, status } = await request.body;
+  try {
+    const [order] = (await db.query(
+      "UPDATE orders SET order_status = ? WHERE id = ?",
+      [status, orderId]
+    )) as unknown as [IOrder];
+
+    if (order.affectedRows === 0) {
+      APIResponse(
+        response,
+        false,
+        HTTP_STATUS.INTERNAL_SERVER,
+        "Something wrong happened!"
+      );
+      return;
+    }
+
+    APIResponse(
+      response,
+      true,
+      HTTP_STATUS.SUCCESS,
+      "Order status updated successfully!"
+    );
+  } catch (error: any) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
 const createOrder: RequestHandler = async (
   request: Request,
   response: Response,
@@ -255,6 +363,44 @@ const createOrder: RequestHandler = async (
           amount,
         }
       );
+  } catch (error: any) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
+const cancelOrder: RequestHandler = async (
+  request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  const { id } = request.params;
+  try {
+    const [order] = (await db.query(
+      "UPDATE orders SET order_status = ? WHERE id = ?",
+      [5, id]
+    )) as unknown as [IOrder];
+
+    if (order.affectedRows === 0) {
+      APIResponse(
+        response,
+        false,
+        HTTP_STATUS.INTERNAL_SERVER,
+        "Something wrong happened!"
+      );
+      return;
+    }
+
+    APIResponse(
+      response,
+      true,
+      HTTP_STATUS.SUCCESS,
+      "Order cancelled successfully!",
+      { time: new Date() }
+    );
   } catch (error: any) {
     if (error) {
       APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
@@ -335,7 +481,10 @@ export default {
   getAllOrders,
   getOrdersByUser,
   getOrderByOrderId,
+  getOrdersByRestaurant,
+  updateOrderStatus,
   createOrder,
+  cancelOrder,
   capturePayment,
   capturePaymentFailure,
   refund,
