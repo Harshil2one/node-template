@@ -4,11 +4,14 @@ import { validateToken } from "../middlewares/auth.middleware";
 
 const riderRouter = express.Router();
 
-const { getAllRequests, registerRider, updateRiderRequest } = riderController;
+const { getAllRequests, getDashboardData, registerRider, updateRiderRequest } =
+  riderController;
 
 riderRouter.use(validateToken);
 
 riderRouter.get("/", getAllRequests);
+
+riderRouter.get("/get-dashboard-details/:userId", getDashboardData);
 
 riderRouter.post("/register", registerRider);
 

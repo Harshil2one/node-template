@@ -93,11 +93,11 @@ const getOrdersByUser: RequestHandler = async (
     }
 
     const [orders] = (await db.query(
-      "SELECT * FROM orders WHERE user_id = ? AND (order_status = ? OR order_status = ?) ORDER BY id DESC",
-      [userId, ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED]
+      "SELECT * FROM orders WHERE user_id = ? AND (order_status != ? ) ORDER BY id DESC",
+      [userId, ORDER_STATUS.ORDER_FAILED]
     )) as any;
 
-    if (!orders) {
+    if (orders?.length === 0) {
       return APIResponse(
         response,
         false,
@@ -281,17 +281,98 @@ const getOrdersByRestaurant: RequestHandler = async (
   }
 };
 
+const getRideRequests: RequestHandler = async (
+  request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  try {
+    const [orders] = (await db.query(
+      "SELECT * FROM orders WHERE payment_status = ? AND (order_status = ? OR order_status = ?) ORDER BY id DESC",
+      ["paid", ORDER_STATUS.OUT_FOR_DELIVERY, ORDER_STATUS.DELIVERED]
+    )) as any;
+
+    if (!orders) {
+      return APIResponse(
+        response,
+        false,
+        HTTP_STATUS.NOT_FOUND,
+        "No order pickups are there!"
+      );
+    }
+
+    const allFoodIds = [
+      ...new Set(orders.flatMap((order: IOrder) => order.food)),
+    ];
+
+    const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
+      allFoodIds,
+    ])) as any;
+
+    const [restaurants] = (await db.query("SELECT * FROM restaurants")) as any;
+
+    const [users] = (await db.query("SELECT * from users")) as any;
+
+    const enrichedOrders = orders.map((order: IOrder) => {
+      const foodIds = order.food;
+      const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
+      const food = orderFoods.map((f: IFood) => ({
+        ...f,
+        count: foodIds.filter((id: number) => id === f.id).length,
+      }));
+      const restaurant = restaurants.find(
+        (r: IRestaurant) => r.id === order.restaurant
+      );
+      const user = users.find((u: IUser) => u.id === order.pickup_by) as IUser;
+
+      return {
+        ...order,
+        food,
+        restaurant,
+        pickup_by: {
+          id: user?.id,
+          name: user?.name,
+        },
+      };
+    });
+
+    APIResponse(
+      response,
+      true,
+      HTTP_STATUS.SUCCESS,
+      "Order pickups fetched successfully!",
+      enrichedOrders
+    );
+  } catch (error: unknown) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
 const updateOrderStatus: RequestHandler = async (
   request: Request,
   response: Response,
   next: NextFunction
 ) => {
-  const { orderId, status } = await request.body;
+  const { orderId, status, pickupBy } = await request.body;
   try {
-    const [order] = (await db.query(
-      "UPDATE orders SET order_status = ? WHERE id = ?",
-      [status, orderId]
-    )) as unknown as [IOrder];
+    let order = {} as IOrder;
+    if (pickupBy) {
+      const [updatedOrder] = (await db.query(
+        "UPDATE orders SET order_status = ?, pickup_by = ?, pickup_time = ? WHERE id = ?",
+        [status, pickupBy, Date.now() / 1000, orderId]
+      )) as unknown as [IOrder];
+      order = updatedOrder;
+    } else {
+      const [updatedOrder] = (await db.query(
+        "UPDATE orders SET order_status = ? WHERE id = ?",
+        [status, orderId]
+      )) as unknown as [IOrder];
+      order = updatedOrder;
+    }
 
     if (order.affectedRows === 0) {
       APIResponse(
@@ -339,7 +420,7 @@ const createOrder: RequestHandler = async (
     });
     const { id, receipt, status, created_at } = data;
     const [orderEntry] = (await db.query(
-      "INSERT INTO orders (user_id, order_id, receipt, amount, restaurant, food, payment_status, payment_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO orders (user_id, order_id, receipt, amount, restaurant, food, payment_status, payment_id, delivery_fee, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         userId,
         id,
@@ -349,6 +430,7 @@ const createOrder: RequestHandler = async (
         JSON.stringify(food),
         status,
         "",
+        amount * 0.08,
         created_at,
       ]
     )) as unknown as [IOrder];
@@ -482,6 +564,7 @@ export default {
   getOrdersByUser,
   getOrderByOrderId,
   getOrdersByRestaurant,
+  getRideRequests,
   updateOrderStatus,
   createOrder,
   cancelOrder,

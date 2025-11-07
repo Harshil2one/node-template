@@ -259,13 +259,21 @@ const getOwnerDashboardData: RequestHandler = async (
       ];
       const allUserIds = [...new Set(orders.map((o: IOrder) => o.user_id))];
 
-      const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
-        allFoodIds,
-      ])) as any;
+      if(allFoodIds.length === 0) {
+        return APIResponse(
+          response,
+          false,
+          HTTP_STATUS.BAD_REQUEST,
+          "Restaurant has no orders delivered!"
+        );
+      }
 
-      const [users] = (await db.query("SELECT * FROM users WHERE id IN (?)", [
-        allUserIds,
-      ])) as any;
+      const [foods] = (await db.query(
+        "SELECT * FROM foods WHERE id IN (?)",
+        allFoodIds
+      )) as any;
+
+      const [users] = (await db.query("SELECT * FROM users WHERE id IN (?)", allUserIds)) as any;
 
       const foodMap = new Map(foods.map((food: any) => [food.id, food]));
       const userMap = new Map(users.map((u: IUser) => [u.id, u]));

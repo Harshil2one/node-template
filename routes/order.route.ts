@@ -8,6 +8,7 @@ const {
   getOrdersByUser,
   getOrderByOrderId,
   getOrdersByRestaurant,
+  getRideRequests,
   updateOrderStatus,
   createOrder,
   cancelOrder,
@@ -19,6 +20,8 @@ const {
 orderRouter.use(validateToken);
 
 orderRouter.route("/").get(getAllOrders);
+
+orderRouter.route("/rides").get(getRideRequests);
 
 orderRouter.route("/:userId").get(getOrdersByUser);
 

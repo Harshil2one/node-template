@@ -3,6 +3,9 @@ import { HTTP_STATUS } from "../enums/status.enum";
 import { APIResponse } from "../helpers/apiResponse";
 import db from "../config/db.config";
 import { IRider } from "../models/rider.model";
+import { ORDER_STATUS } from "../enums/restaurants.enum";
+import { IOrder } from "../models/orders.model";
+import { IUser } from "../models/auth.model";
 
 const getAllRequests: RequestHandler = async (
   request: Request,
@@ -29,6 +32,147 @@ const getAllRequests: RequestHandler = async (
       HTTP_STATUS.SUCCESS,
       "Rider requests fetched successfully!",
       requests
+    );
+  } catch (error: unknown) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
+const getDashboardData: RequestHandler = async (
+  request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  const { userId } = await request.params;
+  try {
+    const [orders] = (await db.query(
+      "SELECT * FROM orders WHERE pickup_by = ? AND order_status = ?",
+      [userId, ORDER_STATUS.DELIVERED]
+    )) as any;
+
+    if (!orders) {
+      return APIResponse(
+        response,
+        false,
+        HTTP_STATUS.BAD_REQUEST,
+        "No orders delivered yet!"
+      );
+    }
+
+    const getDashboardData = async () => {
+      const totalRevenue = orders.reduce(
+        (sum: number, o: IOrder) => sum + Number(o.delivery_fee),
+        0
+      );
+      const totalOrders = orders.length;
+      const averageOrderValue =
+        totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+      const ordersGroupedByDate = orders.reduce((acc: any, o: IOrder) => {
+        const date = new Date(o.created_at * 1000).toISOString().split("T")[0];
+        acc[date] = (acc[date] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const revenueGroupedByDate = orders.reduce((acc: any, o: IOrder) => {
+        const date = new Date(o.created_at * 1000).toISOString().split("T")[0];
+        acc[date] = (acc[date] || 0) + Number(o.delivery_fee);
+        return acc;
+      }, {} as Record<string, number>);
+
+      const allFoodIds = [
+        ...new Set(orders.flatMap((order: IOrder) => order.food)),
+      ];
+      const allUserIds = [...new Set(orders.map((o: IOrder) => o.user_id))];
+
+      const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
+        allFoodIds,
+      ])) as any;
+
+      const [users] = (await db.query("SELECT * FROM users WHERE id IN (?)", [
+        allUserIds,
+      ])) as any;
+
+      const foodMap = new Map(foods.map((food: any) => [food.id, food]));
+      const userMap = new Map(users.map((u: IUser) => [u.id, u]));
+
+      const enrichedOrders = orders.map((order: IOrder) => {
+        const foodCountMap: Record<number, number> = {};
+        order.food.forEach((id: number) => {
+          foodCountMap[id] = (foodCountMap[id] || 0) + 1;
+        });
+
+        const uniqueFoods = Object.entries(foodCountMap)
+          .map(([id, count]) => {
+            const food = foodMap.get(Number(id));
+            if (!food) return null;
+            return { ...food, count };
+          })
+          .filter(Boolean);
+
+        const user = userMap.get(order.user_id) as IUser;
+
+        return {
+          ...order,
+          food: uniqueFoods,
+          user: user
+            ? {
+                name: user.name,
+                email: user.email,
+                image: user.image,
+                contact: user.contact,
+              }
+            : null,
+        };
+      });
+
+      const recentOrders = enrichedOrders
+        .sort((a: IOrder, b: IOrder) => b.created_at - a.created_at)
+        .slice(0, 5);
+
+      const now = Date.now() / 1000;
+      const sevenDaysAgo = now - 7 * 24 * 60 * 60;
+      const fourteenDaysAgo = now - 14 * 24 * 60 * 60;
+
+      const lastWeekRevenue = orders
+        .filter((o: IOrder) => o.created_at >= sevenDaysAgo)
+        .reduce((sum: number, o: IOrder) => sum + Number(o.amount), 0);
+
+      const prevWeekRevenue = orders
+        .filter(
+          (o: IOrder) =>
+            o.created_at >= fourteenDaysAgo && o.created_at < sevenDaysAgo
+        )
+        .reduce((sum: number, o: IOrder) => sum + Number(o.amount), 0);
+
+      const revenueGrowth =
+        prevWeekRevenue === 0
+          ? 100
+          : ((lastWeekRevenue - prevWeekRevenue) / prevWeekRevenue) * 100;
+
+      return {
+        totalRevenue,
+        totalOrders,
+        averageOrderValue,
+        orders: ordersGroupedByDate,
+        dailyRevenue: revenueGroupedByDate,
+        recentOrders,
+        revenueGrowth: Number(revenueGrowth.toFixed(2)),
+      };
+    };
+
+    const dashboardData = await getDashboardData();
+
+    APIResponse(
+      response,
+      true,
+      HTTP_STATUS.SUCCESS,
+      "Dashboard details fetched successfully!",
+      dashboardData
     );
   } catch (error: unknown) {
     if (error) {
@@ -156,6 +300,7 @@ const updateRiderRequest: RequestHandler = async (
 
 export default {
   getAllRequests,
+  getDashboardData,
   registerRider,
   updateRiderRequest,
 };
