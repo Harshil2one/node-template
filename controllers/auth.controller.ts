@@ -278,6 +278,7 @@ const sendOtpMail: RequestHandler = async (
       // service: "gmail",
       host: "smtp.ethereal.email",
       port: 587,
+      secure: false,
       auth: {
         // user: "bigbite.0110@gmail.com",
         // pass: "kseb rvrh avds cuib",
@@ -324,13 +325,13 @@ const sendOtpMail: RequestHandler = async (
   </div>
   `,
       });
-      console.log(info);
 
       APIResponse(
         response,
         true,
         HTTP_STATUS.SUCCESS,
-        "Email with otp has sent!"
+        "Email with otp has sent!",
+        { preview: nodemailer.getTestMessageUrl(info) }
       );
     })();
   } catch (error: unknown) {

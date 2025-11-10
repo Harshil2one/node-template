@@ -12,6 +12,7 @@ import riderRouter from "./rider.route";
 import chatRouter from "./chat.route";
 import footerRouter from "./footer.route";
 import csvRouter from "./csv.route";
+import notificationRouter from "./notifications.route";
 
 const swaggerUI = require("swagger-ui-express");
 const swaggerConfig = require("../config/swagger.config");
@@ -46,6 +47,7 @@ export default (app: Application) => {
     app.use(`${BASE_PATH}/chat`, chatRouter);
     app.use(`${BASE_PATH}/custom`, footerRouter);
     app.use(`${BASE_PATH}/csv`, csvRouter);
+    app.use(`${BASE_PATH}/notification`, notificationRouter);
   };
   routes();
 };

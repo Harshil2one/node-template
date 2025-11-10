@@ -6,7 +6,10 @@ import { IOrder } from "../models/orders.model";
 import { IUser } from "../models/auth.model";
 import { IFood, IRestaurant } from "../models/restaurants.model";
 import { ORDER_STATUS } from "../enums/restaurants.enum";
+import { getSocket } from "../config/socket.config";
+import { emitToUser } from "../helpers/socket";
 
+const nodemailer = require("nodemailer");
 const Razorpay = require("razorpay");
 
 const getAllOrders: RequestHandler = async (
@@ -181,8 +184,12 @@ const getOrderByOrderId: RequestHandler = async (
       [orders.restaurant]
     )) as any;
 
+    const [users] = (await db.query("SELECT * from users")) as any;
+
     const foodIds = orders.food;
     const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
+    const user = users.find((u: IUser) => u.id === orders.pickup_by) as IUser;
+
     const enrichedOrder = {
       ...orders,
       food: orderFoods.map((f: IFood) => ({
@@ -192,6 +199,10 @@ const getOrderByOrderId: RequestHandler = async (
       restaurant: restaurants.find(
         (r: IRestaurant) => r.id === orders.restaurant
       ),
+      pickup_by: {
+        id: user?.id,
+        name: user?.name,
+      },
     };
 
     APIResponse(
@@ -360,10 +371,16 @@ const updateOrderStatus: RequestHandler = async (
   const { orderId, status, pickupBy } = await request.body;
   try {
     let order = {} as IOrder;
-    if (pickupBy) {
+    if (pickupBy && status !== ORDER_STATUS.OUT_FOR_DELIVERY) {
       const [updatedOrder] = (await db.query(
-        "UPDATE orders SET order_status = ?, pickup_by = ?, pickup_time = ? WHERE id = ?",
-        [status, pickupBy, Date.now() / 1000, orderId]
+        "UPDATE orders SET order_status = ?, delivered_time = ? WHERE id = ?",
+        [status, Date.now() / 1000, orderId]
+      )) as unknown as [IOrder];
+      order = updatedOrder;
+    } else if (pickupBy) {
+      const [updatedOrder] = (await db.query(
+        "UPDATE orders SET pickup_by = ?, pickup_time = ? WHERE id = ?",
+        [pickupBy, Date.now() / 1000, orderId]
       )) as unknown as [IOrder];
       order = updatedOrder;
     } else {
@@ -399,14 +416,53 @@ const updateOrderStatus: RequestHandler = async (
   }
 };
 
+const updateOrderRatings: RequestHandler = async (
+  request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  const { orderId } = await request.params;
+  const { ratings, ratingsText } = await request.body;
+  try {
+    const [order] = (await db.query(
+      "UPDATE orders SET ratings = ?, ratingsText = ? WHERE id = ?",
+      [ratings, ratingsText, orderId]
+    )) as unknown as [IOrder];
+
+    if (order.affectedRows === 0) {
+      APIResponse(
+        response,
+        false,
+        HTTP_STATUS.INTERNAL_SERVER,
+        "Something wrong happened!"
+      );
+      return;
+    }
+
+    APIResponse(
+      response,
+      true,
+      HTTP_STATUS.SUCCESS,
+      "Thank you for your feedback."
+    );
+  } catch (error: any) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
 const createOrder: RequestHandler = async (
   request: Request,
   response: Response,
   next: NextFunction
 ) => {
+  const { io } = getSocket();
   try {
     const { userId, amount, orderInfo } = request.body;
-    const { restaurant, food } = orderInfo;
+    const { email, restaurant, food } = orderInfo;
 
     const rzp = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID,
@@ -434,17 +490,81 @@ const createOrder: RequestHandler = async (
         created_at,
       ]
     )) as unknown as [IOrder];
+    const testAccount = await nodemailer.createTestAccount();
+
+    const transporter = nodemailer.createTransport({
+      // service: "gmail",
+      host: "smtp.ethereal.email",
+      port: 587,
+      auth: {
+        // user: "bigbite.0110@gmail.com",
+        // pass: "kseb rvrh avds cuib",
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+
     if (orderEntry?.affectedRows && orderEntry?.affectedRows > 0)
-      APIResponse(
-        response,
-        true,
-        HTTP_STATUS.SUCCESS,
-        "Order placed successfully!",
-        {
-          order_id: id,
-          amount,
-        }
-      );
+      (async () => {
+        const info = await transporter.sendMail({
+          from: '"Big Bite" <bigbite.0110@gmail.com>',
+          to: email,
+          subject: "Order Placed - Confirmation",
+          html: `
+  <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center;">
+    <div style="margin: auto; background: white; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); overflow: hidden;">
+      <div style="background-color: #ff4b2b; padding: 20px 0;">
+        <h2 style="color: white; margin: 0;">Bigbite</h2>
+      </div>
+
+      <div style="padding: 30px;">
+        <h3 style="color: #333;">Email Verification</h3>
+        <p style="color: #555; font-size: 15px; line-height: 1.6;">
+          Your order is placed with <b>Big Bite</b>. Below is the details about your order.
+        </p>
+
+        <div style="margin: 25px 0;">
+          <span style="font-size: 32px; letter-spacing: 8px; color: #ff4b2b; font-weight: bold;">ORDER ID : ${id}</span>
+        </div>
+
+        <p style="color: #777; font-size: 14px;">
+          Use this ID to verify your order and help delivery partners to support customers by serving correct orders.
+        </p>
+
+        <div style="margin-top: 30px;">
+          Thank you.
+        </div>
+      </div>
+
+      <div style="background-color: #fafafa; padding: 15px; font-size: 12px; color: #999;">
+        <p>© ${new Date().getFullYear()} Bigbite. All rights reserved.</p>
+      </div>
+    </div>
+  </div>
+  `,
+        });
+
+        const [notification] = (await db.query(
+          "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
+          [`Your order is placed at Bigbite.`, userId, `/order-placed/${id}`, Date.now() / 1000]
+        )) as unknown as [IUser];
+
+        emitToUser(io, userId, "receive_notification", {
+          data: notification,
+        });
+
+        APIResponse(
+          response,
+          true,
+          HTTP_STATUS.SUCCESS,
+          "Order placed successfully!",
+          {
+            order_id: id,
+            amount,
+            preview: nodemailer.getTestMessageUrl(info),
+          }
+        );
+      })();
   } catch (error: any) {
     if (error) {
       APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
@@ -461,28 +581,40 @@ const cancelOrder: RequestHandler = async (
 ) => {
   const { id } = request.params;
   try {
-    const [order] = (await db.query(
-      "UPDATE orders SET order_status = ? WHERE id = ?",
-      [5, id]
-    )) as unknown as [IOrder];
+    const rzp = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
 
-    if (order.affectedRows === 0) {
+    const refund = await rzp.payments.refund(request.body.paymentId, {
+      amount: Number(request.body.amount) * 100,
+      speed: "optimum",
+    });
+
+    if (refund.status === "processed") {
+      const [order] = (await db.query(
+        "UPDATE orders SET order_status = ? WHERE id = ?",
+        [5, id]
+      )) as unknown as [IOrder];
+
+      if (order.affectedRows === 0) {
+        APIResponse(
+          response,
+          false,
+          HTTP_STATUS.INTERNAL_SERVER,
+          "Something wrong happened!"
+        );
+        return;
+      }
+
       APIResponse(
         response,
-        false,
-        HTTP_STATUS.INTERNAL_SERVER,
-        "Something wrong happened!"
+        true,
+        HTTP_STATUS.SUCCESS,
+        "Order cancelled successfully!",
+        { time: new Date() }
       );
-      return;
     }
-
-    APIResponse(
-      response,
-      true,
-      HTTP_STATUS.SUCCESS,
-      "Order cancelled successfully!",
-      { time: new Date() }
-    );
   } catch (error: any) {
     if (error) {
       APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
@@ -526,36 +658,13 @@ const capturePaymentFailure: RequestHandler = async (
   ) {
     const [updateOrder] = (await db.query(
       "UPDATE orders SET payment_status = ?, payment_id = ?, order_status = ? WHERE order_id = ?",
-      ["failed", payment_id, 7, orderId]
+      ["failed", payment_id, ORDER_STATUS.ORDER_FAILED, orderId]
     )) as unknown as [IOrder];
     if (updateOrder?.affectedRows && updateOrder?.affectedRows > 0)
       APIResponse(response, true, HTTP_STATUS.SUCCESS, "Payment Cancelled!");
   } else {
     APIResponse(response, true, HTTP_STATUS.SUCCESS, "Something went wrong");
     return next("Something went wrong");
-  }
-};
-
-const refund: RequestHandler = async (
-  request: Request,
-  response: Response,
-  next: NextFunction
-) => {
-  try {
-    const options = {
-      payment_id: request.body.paymentId,
-      amount: request.body.amount,
-    };
-
-    const razorpayResponse = await Razorpay.refund(options);
-
-    response.send("Successfully refunded");
-  } catch (error) {
-    if (error) {
-      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
-    } else {
-      return next(error);
-    }
   }
 };
 
@@ -566,9 +675,9 @@ export default {
   getOrdersByRestaurant,
   getRideRequests,
   updateOrderStatus,
+  updateOrderRatings,
   createOrder,
   cancelOrder,
   capturePayment,
   capturePaymentFailure,
-  refund,
 };

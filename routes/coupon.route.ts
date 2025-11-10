@@ -3,7 +3,15 @@ import { validateToken } from "../middlewares/auth.middleware";
 import couponController from "../controllers/coupon.controller";
 const couponRouter = express.Router();
 
-const { getAllCoupons, validateCoupon, getCouponById, createCoupon, updateCoupon, deleteCouponById } = couponController;
+const {
+  getAllCoupons,
+  validateCoupon,
+  updateCouponRedemption,
+  getCouponById,
+  createCoupon,
+  updateCoupon,
+  deleteCouponById,
+} = couponController;
 
 couponRouter.use(validateToken);
 
@@ -42,6 +50,8 @@ couponRouter.route("/").get(getAllCoupons);
  *         description: Local development server
  */
 couponRouter.route("/:userId").post(validateCoupon);
+
+couponRouter.route("/redeem/:userId").post(updateCouponRedemption);
 
 couponRouter.get("/:id", getCouponById);
 

@@ -69,8 +69,9 @@ const getDashboardData: RequestHandler = async (
         0
       );
       const totalOrders = orders.length;
-      const averageOrderValue =
-        totalOrders > 0 ? totalRevenue / totalOrders : 0;
+      const ratings =
+        orders.reduce((sum: number, o: IOrder) => sum + Number(o.ratings), 0) /
+        orders.filter((rate: { ratings: number }) => rate.ratings > 0).length;
 
       const ordersGroupedByDate = orders.reduce((acc: any, o: IOrder) => {
         const date = new Date(o.created_at * 1000).toISOString().split("T")[0];
@@ -140,14 +141,14 @@ const getDashboardData: RequestHandler = async (
 
       const lastWeekRevenue = orders
         .filter((o: IOrder) => o.created_at >= sevenDaysAgo)
-        .reduce((sum: number, o: IOrder) => sum + Number(o.amount), 0);
+        .reduce((sum: number, o: IOrder) => sum + Number(o.delivery_fee), 0);
 
       const prevWeekRevenue = orders
         .filter(
           (o: IOrder) =>
             o.created_at >= fourteenDaysAgo && o.created_at < sevenDaysAgo
         )
-        .reduce((sum: number, o: IOrder) => sum + Number(o.amount), 0);
+        .reduce((sum: number, o: IOrder) => sum + Number(o.delivery_fee), 0);
 
       const revenueGrowth =
         prevWeekRevenue === 0
@@ -157,7 +158,7 @@ const getDashboardData: RequestHandler = async (
       return {
         totalRevenue,
         totalOrders,
-        averageOrderValue,
+        ratings,
         orders: ordersGroupedByDate,
         dailyRevenue: revenueGroupedByDate,
         recentOrders,

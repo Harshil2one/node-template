@@ -10,11 +10,11 @@ const {
   getOrdersByRestaurant,
   getRideRequests,
   updateOrderStatus,
+  updateOrderRatings,
   createOrder,
   cancelOrder,
   capturePayment,
   capturePaymentFailure,
-  refund,
 } = ordersController;
 
 orderRouter.use(validateToken);
@@ -31,16 +31,16 @@ orderRouter.route("/restaurant/:restaurantId").get(getOrdersByRestaurant);
 
 orderRouter.route("/update-status").post(updateOrderStatus);
 
+orderRouter.route("/ratings/:orderId").post(updateOrderRatings);
+
 orderRouter.route("/createOrder").post(createOrder);
 
-orderRouter.route("/cancel/:id").get(cancelOrder);
+orderRouter.route("/cancel/:id").post(cancelOrder);
 
 orderRouter.route("/capturePayment").post(capturePayment);
 
 orderRouter
   .route("/capturePaymentFailure/:orderId")
   .post(capturePaymentFailure);
-
-orderRouter.route("/refund").post(refund);
 
 export default orderRouter;

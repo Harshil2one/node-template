@@ -15,5 +15,7 @@ export interface IOrder {
   pickup_by: number;
   pickup_time: number;
   delivery_fee: number;
+  ratings: number;
+  ratingsText: string;
   affectedRows?: number;
 }

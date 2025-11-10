@@ -259,7 +259,7 @@ const getOwnerDashboardData: RequestHandler = async (
       ];
       const allUserIds = [...new Set(orders.map((o: IOrder) => o.user_id))];
 
-      if(allFoodIds.length === 0) {
+      if (allFoodIds.length === 0) {
         return APIResponse(
           response,
           false,
@@ -273,7 +273,10 @@ const getOwnerDashboardData: RequestHandler = async (
         allFoodIds
       )) as any;
 
-      const [users] = (await db.query("SELECT * FROM users WHERE id IN (?)", allUserIds)) as any;
+      const [users] = (await db.query(
+        "SELECT * FROM users WHERE id IN (?)",
+        allUserIds
+      )) as any;
 
       const foodMap = new Map(foods.map((food: any) => [food.id, food]));
       const userMap = new Map(users.map((u: IUser) => [u.id, u]));
@@ -526,13 +529,13 @@ const bookTable: RequestHandler = async (
   </div>
   `,
       });
-      console.log(info);
 
       APIResponse(
         response,
         true,
         HTTP_STATUS.SUCCESS,
-        "Table booked successfully!"
+        "Table booked successfully!",
+        { preview: nodemailer.getTestMessageUrl(info) }
       );
     })();
   } catch (error: unknown) {

@@ -85,6 +85,14 @@ const validateCoupon: RequestHandler = async (
         "Coupon not available, Please try another!"
       );
       return;
+    } else if (matchedCode?.isActive === 0) {
+      APIResponse(
+        response,
+        false,
+        HTTP_STATUS.BAD_REQUEST,
+        "Offer expired or not applicable!"
+      );
+      return;
     } else if (matchedCode?.redeemed?.includes(Number(userId))) {
       APIResponse(
         response,
@@ -102,6 +110,53 @@ const validateCoupon: RequestHandler = async (
       "Coupon code applied successfully!",
       matchedCode?.discount
     );
+  } catch (error: unknown) {
+    if (error) {
+      APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
+    } else {
+      return next(error);
+    }
+  }
+};
+
+const updateCouponRedemption: RequestHandler = async (
+  request: Request,
+  response: Response,
+  next: NextFunction
+) => {
+  try {
+    const { code } = request.body;
+    const { userId } = request.params;
+
+    const [coupons] = (await db.query("SELECT * FROM coupons", [
+      Number(userId),
+    ])) as any;
+
+    const matchedCode = coupons?.find(
+      (coupon: { code: string }) =>
+        coupon.code?.toLowerCase() === code?.toLowerCase()
+    );
+
+    const [coupon] = (await db.query(
+      "UPDATE coupons SET redeemed = ? WHERE id = ?",
+      [
+        JSON.stringify(
+          matchedCode?.redeemed
+            ? [...matchedCode?.redeemed, Number(userId)]
+            : [Number(userId)]
+        ),
+        matchedCode?.id,
+      ]
+    )) as unknown as [ICoupon];
+
+    if (coupon)
+      APIResponse(
+        response,
+        true,
+        HTTP_STATUS.SUCCESS,
+        "Coupon code redeemed!",
+        matchedCode?.discount
+      );
   } catch (error: unknown) {
     if (error) {
       APIResponse(response, false, HTTP_STATUS.BAD_REQUEST, error as string);
@@ -247,6 +302,7 @@ const deleteCouponById: RequestHandler = async (
 export default {
   getAllCoupons,
   validateCoupon,
+  updateCouponRedemption,
   getCouponById,
   createCoupon,
   updateCoupon,
