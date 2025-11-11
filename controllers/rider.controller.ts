@@ -6,6 +6,10 @@ import { IRider } from "../models/rider.model";
 import { ORDER_STATUS } from "../enums/restaurants.enum";
 import { IOrder } from "../models/orders.model";
 import { IUser } from "../models/auth.model";
+import { USER_ROLE } from "../enums/auth.enum";
+import { INotification } from "../models/notifications.model";
+import { emitToUser } from "../helpers/socket";
+import { getSocket } from "../config/socket.config";
 
 const getAllRequests: RequestHandler = async (
   request: Request,
@@ -190,6 +194,8 @@ const registerRider: RequestHandler = async (
   next: NextFunction
 ) => {
   const { name, city, contact } = await request.body;
+  const { io } = getSocket();
+
   try {
     const [rider] = (await db.query(
       "INSERT INTO riders (name, city, contact) VALUES (?, ?, ?)",
@@ -218,6 +224,35 @@ const registerRider: RequestHandler = async (
       messagingServiceSid: process.env.TWILIO_MESSAGE_SID,
       to: "+91" + rider.contact,
     });
+
+    const [users] = (await db.query("SELECT * FROM users WHERE role = ?", [
+      USER_ROLE.ADMIN,
+    ])) as any;
+    const notificationUsers = users?.map((user: IUser) => user?.id);
+
+    const [[data]] = (await db.query("SELECT * FROM riders WHERE id = ?", [
+      rider?.insertId,
+    ])) as unknown as [[IRider]];
+
+    const notification = {
+      message: `New rider request available.`,
+      receiver: JSON.stringify(notificationUsers),
+      link: `/rider-requests`,
+      created_at: Date.now() / 1000,
+    };
+
+    (await db.query(
+      "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
+      [
+        notification.message,
+        notification.receiver,
+        notification.link,
+        notification.created_at,
+      ]
+    )) as unknown as [INotification];
+
+    emitToUser(io, notificationUsers, "receive_rider", data, notification);
+
     APIResponse(response, true, HTTP_STATUS.SUCCESS, "Rider request sent!");
   } catch (error: unknown) {
     if (error) {

@@ -8,6 +8,8 @@ import { IFood, IRestaurant } from "../models/restaurants.model";
 import { ORDER_STATUS } from "../enums/restaurants.enum";
 import { getSocket } from "../config/socket.config";
 import { emitToUser } from "../helpers/socket";
+import { INotification } from "../models/notifications.model";
+import { USER_ROLE } from "../enums/auth.enum";
 
 const nodemailer = require("nodemailer");
 const Razorpay = require("razorpay");
@@ -299,7 +301,7 @@ const getRideRequests: RequestHandler = async (
 ) => {
   try {
     const [orders] = (await db.query(
-      "SELECT * FROM orders WHERE payment_status = ? AND (order_status = ? OR order_status = ?) ORDER BY id DESC",
+      "SELECT * FROM orders WHERE payment_status = ? AND (order_status = ? OR order_status = ?) ORDER BY order_status ASC",
       ["paid", ORDER_STATUS.OUT_FOR_DELIVERY, ORDER_STATUS.DELIVERED]
     )) as any;
 
@@ -369,6 +371,8 @@ const updateOrderStatus: RequestHandler = async (
   next: NextFunction
 ) => {
   const { orderId, status, pickupBy } = await request.body;
+  const { io } = getSocket();
+
   try {
     let order = {} as IOrder;
     if (pickupBy && status !== ORDER_STATUS.OUT_FOR_DELIVERY) {
@@ -389,16 +393,46 @@ const updateOrderStatus: RequestHandler = async (
         [status, orderId]
       )) as unknown as [IOrder];
       order = updatedOrder;
-    }
 
-    if (order.affectedRows === 0) {
-      APIResponse(
-        response,
-        false,
-        HTTP_STATUS.INTERNAL_SERVER,
-        "Something wrong happened!"
-      );
-      return;
+      if (order.affectedRows === 0) {
+        APIResponse(
+          response,
+          false,
+          HTTP_STATUS.INTERNAL_SERVER,
+          "Something wrong happened!"
+        );
+        return;
+      }
+
+      if (status === ORDER_STATUS.OUT_FOR_DELIVERY) {
+        const [users] = (await db.query("SELECT * FROM users WHERE role = ?", [
+          USER_ROLE.RIDER,
+        ])) as any;
+        const notificationUsers = users?.map((user: IUser) => user?.id);
+
+        const [[data]] = (await db.query("SELECT * FROM orders WHERE id = ?", [
+          orderId,
+        ])) as unknown as [[IOrder]];
+
+        const notification = {
+          message: `New order pickup request found.`,
+          receiver: JSON.stringify(notificationUsers),
+          link: `/riders/rides`,
+          created_at: Date.now() / 1000,
+        };
+
+        (await db.query(
+          "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
+          [
+            notification.message,
+            notification.receiver,
+            notification.link,
+            notification.created_at,
+          ]
+        )) as unknown as [INotification];
+
+        emitToUser(io, notificationUsers, "receive_pickup", data, notification);
+      }
     }
 
     APIResponse(
@@ -490,8 +524,13 @@ const createOrder: RequestHandler = async (
         created_at,
       ]
     )) as unknown as [IOrder];
-    const testAccount = await nodemailer.createTestAccount();
 
+    const [[restaurantDetails]] = (await db.query(
+      "SELECT * FROM restaurants WHERE id = ?",
+      [restaurant]
+    )) as unknown as [[IRestaurant]];
+
+    const testAccount = await nodemailer.createTestAccount();
     const transporter = nodemailer.createTransport({
       // service: "gmail",
       host: "smtp.ethereal.email",
@@ -520,7 +559,9 @@ const createOrder: RequestHandler = async (
       <div style="padding: 30px;">
         <h3 style="color: #333;">Email Verification</h3>
         <p style="color: #555; font-size: 15px; line-height: 1.6;">
-          Your order is placed with <b>Big Bite</b>. Below is the details about your order.
+          Your order is placed with <b>Big Bite</b>. You ordered from ${
+            restaurantDetails?.name
+          } Below is the details about your order.
         </p>
 
         <div style="margin: 25px 0;">
@@ -543,15 +584,53 @@ const createOrder: RequestHandler = async (
   </div>
   `,
         });
+        const [[data]] = (await db.query("SELECT * FROM orders WHERE id = ?", [
+          orderEntry.insertId,
+        ])) as unknown as [[IRestaurant]];
 
-        const [notification] = (await db.query(
+        const notification1 = {
+          message: `You ordered from ${restaurantDetails?.name}.`,
+          receiver: JSON.stringify([userId]),
+          link: `/order-placed/${id}`,
+          created_at: Date.now() / 1000,
+        };
+
+        (await db.query(
           "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
-          [`Your order is placed at Bigbite.`, userId, `/order-placed/${id}`, Date.now() / 1000]
-        )) as unknown as [IUser];
+          [
+            notification1.message,
+            notification1.receiver,
+            notification1.link,
+            notification1.created_at,
+          ]
+        )) as unknown as [INotification];
 
-        emitToUser(io, userId, "receive_notification", {
-          data: notification,
-        });
+        emitToUser(io, userId, "place_order", data, notification1);
+
+        const [users] = (await db.query(
+          "SELECT * FROM users WHERE role = ? AND id = ?",
+          [USER_ROLE.OWNER, restaurantDetails?.created_by]
+        )) as any;
+        const notificationUsers = users?.map((user: IUser) => user?.id);
+
+        const notification2 = {
+          message: `New order is placed.`,
+          receiver: JSON.stringify(notificationUsers),
+          link: `/order-requests`,
+          created_at: Date.now() / 1000,
+        };
+
+        (await db.query(
+          "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
+          [
+            notification2.message,
+            notification2.receiver,
+            notification2.link,
+            notification2.created_at,
+          ]
+        )) as unknown as [INotification];
+
+        emitToUser(io, notificationUsers, "receive_order", data, notification2);
 
         APIResponse(
           response,
@@ -580,6 +659,7 @@ const cancelOrder: RequestHandler = async (
   next: NextFunction
 ) => {
   const { id } = request.params;
+  const { io } = getSocket();
   try {
     const rzp = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID,
@@ -594,8 +674,38 @@ const cancelOrder: RequestHandler = async (
     if (refund.status === "processed") {
       const [order] = (await db.query(
         "UPDATE orders SET order_status = ? WHERE id = ?",
-        [5, id]
+        [ORDER_STATUS.CANCELLED, id]
       )) as unknown as [IOrder];
+
+      const [[orderDetails]] = (await db.query(
+        "SELECT * FROM orders WHERE id = ?",
+        [id]
+      )) as unknown as [[IOrder]];
+
+      const notification = {
+        message: `Your order no. ${orderDetails?.id} is cancelled.`,
+        receiver: JSON.stringify([orderDetails?.user_id]),
+        link: `/order-placed/${orderDetails?.order_id}`,
+        created_at: Date.now() / 1000,
+      };
+
+      (await db.query(
+        "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
+        [
+          notification.message,
+          notification.receiver,
+          notification.link,
+          notification.created_at,
+        ]
+      )) as unknown as [INotification];
+
+      emitToUser(
+        io,
+        orderDetails?.user_id,
+        "cancel_order",
+        orderDetails,
+        notification
+      );
 
       if (order.affectedRows === 0) {
         APIResponse(

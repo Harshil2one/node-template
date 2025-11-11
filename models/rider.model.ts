@@ -5,4 +5,5 @@ export interface IRider {
   contact: string;
   status: string;
   affectedRows?: number;
+  insertId?: number;
 }

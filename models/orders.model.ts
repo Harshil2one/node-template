@@ -18,4 +18,5 @@ export interface IOrder {
   ratings: number;
   ratingsText: string;
   affectedRows?: number;
+  insertId?: number;
 }

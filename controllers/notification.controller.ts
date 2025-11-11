@@ -12,8 +12,8 @@ const getAllNotifications: RequestHandler = async (
   const { receiverId } = request.params;
   try {
     const [notifications] = (await db.query(
-      "SELECT * FROM notifications WHERE receiver = ? AND mark_as_read = ?",
-      [receiverId, 0]
+      "SELECT * FROM notifications WHERE JSON_CONTAINS(receiver, JSON_ARRAY(?)) AND mark_as_read = 0",
+      [Number(receiverId)]
     )) as unknown as [INotification];
 
     if (!notifications) {
@@ -75,10 +75,11 @@ const markAllAsRead: RequestHandler = async (
   response: Response,
   next: NextFunction
 ) => {
+  const { receiverId } = request.params;
   try {
     const [notification] = (await db.query(
-      "UPDATE notifications SET mark_as_read = ?",
-      [1]
+      "UPDATE notifications SET mark_as_read = ? WHERE JSON_CONTAINS(receiver, JSON_ARRAY(?))",
+      [1, [Number(receiverId)]]
     )) as unknown as [INotification];
 
     if (notification)

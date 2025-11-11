@@ -8,7 +8,7 @@ const { getAllNotifications, markAsReadNotification, markAllAsRead } =
 
 notificationRouter.use(validateToken);
 
-notificationRouter.route("/mark-as-read").get(markAllAsRead);
+notificationRouter.route("/mark-as-read/:receiverId").delete(markAllAsRead);
 
 notificationRouter.route("/:receiverId").get(getAllNotifications);
 

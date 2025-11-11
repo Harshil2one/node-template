@@ -18,7 +18,9 @@ export interface IRestaurant {
   bankOffers?: string;
   mode: RESTAURANT_MODE;
   food: number[];
+  created_by: number;
   affectedRows?: number;
+  insertId?: number;
 }
 
 export interface IFood {

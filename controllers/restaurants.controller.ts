@@ -6,6 +6,10 @@ import { IRestaurant } from "../models/restaurants.model";
 import { ORDER_STATUS } from "../enums/restaurants.enum";
 import { IOrder } from "../models/orders.model";
 import { IUser } from "../models/auth.model";
+import { getSocket } from "../config/socket.config";
+import { INotification } from "../models/notifications.model";
+import { emitToUser } from "../helpers/socket";
+import { USER_ROLE } from "../enums/auth.enum";
 const nodemailer = require("nodemailer");
 
 const getRestaurants: RequestHandler = async (
@@ -123,7 +127,9 @@ const getRestaurants: RequestHandler = async (
       );
       restaurants = rows;
     } else {
-      const [rows] = await db.query("SELECT * FROM restaurants");
+      const [rows] = await db.query(
+        "SELECT * FROM restaurants ORDER BY id DESC"
+      );
       restaurants = rows;
     }
 
@@ -386,10 +392,13 @@ const createRestaurant: RequestHandler = async (
     offers = null,
     bankOffers = "",
     isSpecial = 0,
+    created_by,
   } = await request.body;
+  const { io } = getSocket();
+
   try {
     const [restaurant] = (await db.query(
-      "INSERT INTO restaurants (name, images, address, email, contact, time, distance, ratings, rate, special, mode, food, type, offers, bankOffers, isSpecial, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO restaurants (name, images, address, email, contact, time, distance, ratings, rate, special, mode, food, type, offers, bankOffers, isSpecial, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         name,
         JSON.stringify(images),
@@ -408,6 +417,7 @@ const createRestaurant: RequestHandler = async (
         bankOffers,
         isSpecial,
         "pending",
+        created_by,
       ]
     )) as unknown as [IRestaurant];
 
@@ -420,6 +430,34 @@ const createRestaurant: RequestHandler = async (
       );
       return;
     }
+
+    const [users] = (await db.query("SELECT * FROM users WHERE role = ?", [
+      USER_ROLE.ADMIN,
+    ])) as any;
+    const notificationUsers = users?.map((user: IUser) => user?.id);
+
+    const [[data]] = (await db.query("SELECT * FROM restaurants WHERE id = ?", [
+      restaurant?.insertId,
+    ])) as unknown as [[IRestaurant]];
+
+    const notification = {
+      message: `New restaurant added needs your attention.`,
+      receiver: JSON.stringify(notificationUsers),
+      link: `/restaurants`,
+      created_at: Date.now() / 1000,
+    };
+
+    (await db.query(
+      "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
+      [
+        notification.message,
+        notification.receiver,
+        notification.link,
+        notification.created_at,
+      ]
+    )) as unknown as [INotification];
+
+    emitToUser(io, notificationUsers, "receive_restaurant", data, notification);
 
     APIResponse(
       response,
@@ -572,6 +610,7 @@ const updateRestaurant: RequestHandler = async (
     isSpecial,
     open,
   } = await request.body;
+  const { io } = getSocket();
 
   try {
     const [restaurant] = (await db.query(
@@ -607,6 +646,41 @@ const updateRestaurant: RequestHandler = async (
       );
       return;
     }
+
+    const [[updatedRestaurant]] = (await db.query(
+      "SELECT * FROM restaurants WHERE id = ?",
+      [id]
+    )) as unknown as [[IRestaurant]];
+
+    const [users] = (await db.query("SELECT * FROM users WHERE role = ?", [
+      USER_ROLE.ADMIN,
+    ])) as any;
+    const notificationUsers = users?.map((user: IUser) => user?.id);
+
+    const notification = {
+      message: `Restaurant details are updated by owner.`,
+      receiver: JSON.stringify(notificationUsers),
+      link: `/restaurants`,
+      created_at: Date.now() / 1000,
+    };
+
+    (await db.query(
+      "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
+      [
+        notification.message,
+        notification.receiver,
+        notification.link,
+        notification.created_at,
+      ]
+    )) as unknown as [INotification];
+
+    emitToUser(
+      io,
+      notificationUsers,
+      "update_restaurant",
+      updatedRestaurant,
+      notification
+    );
 
     APIResponse(
       response,
@@ -658,6 +732,7 @@ const updateRestaurantStatus: RequestHandler = async (
 ) => {
   const { id } = await request.params;
   const { status } = await request.body;
+  const { io } = getSocket();
 
   try {
     const [restaurant] = (await db.query(
@@ -674,6 +749,39 @@ const updateRestaurantStatus: RequestHandler = async (
       );
       return;
     }
+
+    const [[restaurantDetails]] = (await db.query(
+      "SELECT * FROM restaurants WHERE id = ?",
+      [id]
+    )) as unknown as [[IRestaurant]];
+
+    const notification = {
+      message:
+        status === "rejected"
+          ? `Your restaurant request is rejected.`
+          : `Your restaurant can now take orders.`,
+      receiver: JSON.stringify([restaurantDetails.created_by]),
+      link: `/restaurant`,
+      created_at: Date.now() / 1000,
+    };
+
+    (await db.query(
+      "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
+      [
+        notification.message,
+        notification.receiver,
+        notification.link,
+        notification.created_at,
+      ]
+    )) as unknown as [INotification];
+
+    emitToUser(
+      io,
+      [restaurantDetails.created_by],
+      "restaurant_status",
+      restaurantDetails,
+      notification
+    );
 
     APIResponse(
       response,
