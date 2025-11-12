@@ -7,8 +7,8 @@ import rateLimit from "express-rate-limit";
 // import xss from "xss-clean";
 
 const limiter = rateLimit({
-  max: 100,
-  windowMs: 60 * 60 * 1000,
+  max: 1000,
+  windowMs: 60 * 60 * 1000, // per hour
   message:
     "You've reached to maximum requests from this IP address. Please try after one hour.",
   standardHeaders: true,

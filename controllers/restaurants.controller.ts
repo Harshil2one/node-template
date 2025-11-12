@@ -49,7 +49,7 @@ const getRestaurants: RequestHandler = async (
         params.push("veg");
       }
 
-      if (filters?.includes("non-veg")) {
+      if (filters?.includes("nonVeg")) {
         baseQuery += ` ${filters?.includes("veg") ? "OR" : "AND"} type = ?`;
         params.push("non-veg");
       }

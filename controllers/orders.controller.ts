@@ -10,6 +10,7 @@ import { getSocket } from "../config/socket.config";
 import { emitToUser } from "../helpers/socket";
 import { INotification } from "../models/notifications.model";
 import { USER_ROLE } from "../enums/auth.enum";
+import { getUsers } from "../helpers/utils";
 
 const nodemailer = require("nodemailer");
 const Razorpay = require("razorpay");
@@ -381,6 +382,41 @@ const updateOrderStatus: RequestHandler = async (
         [status, Date.now() / 1000, orderId]
       )) as unknown as [IOrder];
       order = updatedOrder;
+
+      const [[data]] = (await db.query("SELECT * FROM orders WHERE id = ?", [
+        orderId,
+      ])) as unknown as [[IOrder]];
+
+      const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
+        data.food,
+      ])) as any;
+
+      const [[restaurant]] = (await db.query(
+        "SELECT * FROM restaurants WHERE id = ?",
+        data.restaurant
+      )) as any;
+
+      const foodIds = data.food;
+      const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
+      const food = orderFoods.map((f: IFood) => ({
+        ...f,
+        count: foodIds.filter((id: number) => id === f.id).length,
+      }));
+
+      const enrichedOrder = {
+        ...data,
+        food,
+        restaurant,
+      };
+
+      const users = await getUsers(USER_ROLE.USER, enrichedOrder.user_id);
+      const notification = {
+        message: `Recent order: #${enrichedOrder.order_id} is delivered.`,
+        receiver: JSON.stringify(users),
+        link: `/order-placed/${enrichedOrder.order_id}`,
+        created_at: Date.now() / 1000,
+      };
+      emitToUser(io, users, "update_order_status", enrichedOrder, notification);
     } else if (pickupBy) {
       const [updatedOrder] = (await db.query(
         "UPDATE orders SET pickup_by = ?, pickup_time = ? WHERE id = ?",
@@ -404,19 +440,37 @@ const updateOrderStatus: RequestHandler = async (
         return;
       }
 
+      const [[data]] = (await db.query("SELECT * FROM orders WHERE id = ?", [
+        orderId,
+      ])) as unknown as [[IOrder]];
+
+      const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
+        data.food,
+      ])) as any;
+
+      const [[restaurant]] = (await db.query(
+        "SELECT * FROM restaurants WHERE id = ?",
+        data.restaurant
+      )) as any;
+
+      const foodIds = data.food;
+      const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
+      const food = orderFoods.map((f: IFood) => ({
+        ...f,
+        count: foodIds.filter((id: number) => id === f.id).length,
+      }));
+
+      const enrichedOrder = {
+        ...data,
+        food,
+        restaurant,
+      };
+
       if (status === ORDER_STATUS.OUT_FOR_DELIVERY) {
-        const [users] = (await db.query("SELECT * FROM users WHERE role = ?", [
-          USER_ROLE.RIDER,
-        ])) as any;
-        const notificationUsers = users?.map((user: IUser) => user?.id);
-
-        const [[data]] = (await db.query("SELECT * FROM orders WHERE id = ?", [
-          orderId,
-        ])) as unknown as [[IOrder]];
-
+        const riders = await getUsers(USER_ROLE.RIDER);
         const notification = {
-          message: `New order pickup request found.`,
-          receiver: JSON.stringify(notificationUsers),
+          message: `New order pickup request from ${enrichedOrder.restaurant.name}.`,
+          receiver: JSON.stringify(riders),
           link: `/riders/rides`,
           created_at: Date.now() / 1000,
         };
@@ -431,8 +485,24 @@ const updateOrderStatus: RequestHandler = async (
           ]
         )) as unknown as [INotification];
 
-        emitToUser(io, notificationUsers, "receive_pickup", data, notification);
+        emitToUser(io, riders, "receive_pickup", enrichedOrder, notification);
       }
+      const users = await getUsers(USER_ROLE.USER, enrichedOrder.user_id);
+      const notification = {
+        message: `Recent order: #${enrichedOrder.order_id} is ${
+          enrichedOrder.order_status === ORDER_STATUS.ORDER_PLACED
+            ? "placed"
+            : enrichedOrder.order_status === ORDER_STATUS.PREPARING
+            ? "preparing"
+            : enrichedOrder.order_status === ORDER_STATUS.READY_FOR_PICKUP
+            ? "ready to be picked up"
+            : "on the way"
+        }.`,
+        receiver: JSON.stringify(users),
+        link: `/order-placed/${enrichedOrder.order_id}`,
+        created_at: Date.now() / 1000,
+      };
+      emitToUser(io, users, "update_order_status", enrichedOrder, notification);
     }
 
     APIResponse(
@@ -586,7 +656,7 @@ const createOrder: RequestHandler = async (
         });
         const [[data]] = (await db.query("SELECT * FROM orders WHERE id = ?", [
           orderEntry.insertId,
-        ])) as unknown as [[IRestaurant]];
+        ])) as unknown as [[IOrder]];
 
         const notification1 = {
           message: `You ordered from ${restaurantDetails?.name}.`,
@@ -613,8 +683,30 @@ const createOrder: RequestHandler = async (
         )) as any;
         const notificationUsers = users?.map((user: IUser) => user?.id);
 
+        const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
+          data.food,
+        ])) as any;
+
+        const [[restaurant]] = (await db.query(
+          "SELECT * FROM restaurants WHERE id = ?",
+          data.restaurant
+        )) as any;
+
+        const foodIds = data.food;
+        const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
+        const food = orderFoods.map((f: IFood) => ({
+          ...f,
+          count: foodIds.filter((id: number) => id === f.id).length,
+        }));
+
+        const enrichedOrder = {
+          ...data,
+          food,
+          restaurant,
+        };
+
         const notification2 = {
-          message: `New order is placed.`,
+          message: `New order: #${enrichedOrder.order_id} arrived at your restaurant.`,
           receiver: JSON.stringify(notificationUsers),
           link: `/order-requests`,
           created_at: Date.now() / 1000,
@@ -630,7 +722,13 @@ const createOrder: RequestHandler = async (
           ]
         )) as unknown as [INotification];
 
-        emitToUser(io, notificationUsers, "receive_order", data, notification2);
+        emitToUser(
+          io,
+          notificationUsers,
+          "receive_order",
+          enrichedOrder,
+          notification2
+        );
 
         APIResponse(
           response,
@@ -666,10 +764,13 @@ const cancelOrder: RequestHandler = async (
       key_secret: process.env.RAZORPAY_KEY_SECRET,
     });
 
-    const refund = await rzp.payments.refund(request.body.paymentId, {
-      amount: Number(request.body.amount) * 100,
-      speed: "optimum",
-    });
+    const refund =
+      request.body.amount > 0
+        ? await rzp.payments.refund(request.body.paymentId, {
+            amount: Number(request.body.amount) * 100,
+            speed: "optimum",
+          })
+        : { status: "processed" };
 
     if (refund.status === "processed") {
       const [order] = (await db.query(
@@ -683,7 +784,7 @@ const cancelOrder: RequestHandler = async (
       )) as unknown as [[IOrder]];
 
       const notification = {
-        message: `Your order no. ${orderDetails?.id} is cancelled.`,
+        message: `Your order no. ${orderDetails?.order_id} is cancelled.`,
         receiver: JSON.stringify([orderDetails?.user_id]),
         link: `/order-placed/${orderDetails?.order_id}`,
         created_at: Date.now() / 1000,

@@ -17,7 +17,7 @@ export const emitToUser = (
         io?.to(id).emit(event, payload);
 
         if (notification) {
-          io?.to(id).emit("receive_notification", notification);
+          io.to(id).emit("receive_notification", notification);
         }
       });
     } else {

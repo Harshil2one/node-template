@@ -12,7 +12,7 @@ const getAllNotifications: RequestHandler = async (
   const { receiverId } = request.params;
   try {
     const [notifications] = (await db.query(
-      "SELECT * FROM notifications WHERE JSON_CONTAINS(receiver, JSON_ARRAY(?)) AND mark_as_read = 0",
+      "SELECT * FROM notifications WHERE JSON_CONTAINS(receiver, JSON_ARRAY(?)) AND mark_as_read = 0 ORDER BY id DESC",
       [Number(receiverId)]
     )) as unknown as [INotification];
 
