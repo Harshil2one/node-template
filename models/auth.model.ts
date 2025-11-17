@@ -14,6 +14,7 @@ export interface IUser {
     pin: string;
   };
   readonly role: number;
+  readonly token: string | null;
   affectedRows?: number;
 }
 

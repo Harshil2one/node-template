@@ -10,7 +10,7 @@ import { getSocket } from "../config/socket.config";
 import { emitToUser } from "../helpers/socket";
 import { INotification } from "../models/notifications.model";
 import { USER_ROLE } from "../enums/auth.enum";
-import { getUsers } from "../helpers/utils";
+import { getUser, getUsers, sendFCM } from "../helpers/utils";
 
 const nodemailer = require("nodemailer");
 const Razorpay = require("razorpay");
@@ -417,6 +417,15 @@ const updateOrderStatus: RequestHandler = async (
         created_at: Date.now() / 1000,
       };
       emitToUser(io, users, "update_order_status", enrichedOrder, notification);
+
+      const user = await getUser(enrichedOrder.user_id);
+      if (user.token)
+        sendFCM(
+          user.token,
+          `Order delivered`,
+          `Order: ${enrichedOrder.order_id} has been delivered.`,
+          `/order-placed/${enrichedOrder.order_id}`
+        );
     } else if (pickupBy) {
       const [updatedOrder] = (await db.query(
         "UPDATE orders SET pickup_by = ?, pickup_time = ? WHERE id = ?",
@@ -486,6 +495,14 @@ const updateOrderStatus: RequestHandler = async (
         )) as unknown as [INotification];
 
         emitToUser(io, riders, "receive_pickup", enrichedOrder, notification);
+        const user = await getUser(enrichedOrder.user_id);
+        if (user.token)
+          sendFCM(
+            user.token,
+            `New pickup`,
+            `Restaurant: ${enrichedOrder.restaurant.name}`,
+            `/riders/rides`
+          );
       }
       const users = await getUsers(USER_ROLE.USER, enrichedOrder.user_id);
       const notification = {
@@ -503,6 +520,23 @@ const updateOrderStatus: RequestHandler = async (
         created_at: Date.now() / 1000,
       };
       emitToUser(io, users, "update_order_status", enrichedOrder, notification);
+
+      const user = await getUser(enrichedOrder.user_id);
+      if (user.token)
+        sendFCM(
+          user.token,
+          `Order update`,
+          `order: #${enrichedOrder.order_id} has been ${
+            enrichedOrder.order_status === ORDER_STATUS.ORDER_PLACED
+              ? "placed"
+              : enrichedOrder.order_status === ORDER_STATUS.PREPARING
+              ? "preparing"
+              : enrichedOrder.order_status === ORDER_STATUS.READY_FOR_PICKUP
+              ? "ready to be picked up"
+              : "on the way"
+          }.`,
+          `/order-placed/${enrichedOrder.order_id}`
+        );
     }
 
     APIResponse(
@@ -677,6 +711,15 @@ const createOrder: RequestHandler = async (
 
         emitToUser(io, userId, "place_order", data, notification1);
 
+        const user1 = await getUser(data.user_id);
+        if (user1.token)
+          sendFCM(
+            user1.token,
+            `Order placed`,
+            `You ordered from ${restaurantDetails?.name}.`,
+            `/order-placed/${id}`
+          );
+
         const [users] = (await db.query(
           "SELECT * FROM users WHERE role = ? AND id = ?",
           [USER_ROLE.OWNER, restaurantDetails?.created_by]
@@ -729,6 +772,15 @@ const createOrder: RequestHandler = async (
           enrichedOrder,
           notification2
         );
+
+        const user2 = await getUser(data.user_id);
+        if (user2.token)
+          sendFCM(
+            user2.token,
+            `New order`,
+            `Order: #${enrichedOrder.order_id} arrived at your restaurant.`,
+            `/order-requests`
+          );
 
         APIResponse(
           response,
@@ -807,6 +859,15 @@ const cancelOrder: RequestHandler = async (
         orderDetails,
         notification
       );
+
+      const user = await getUser(orderDetails.user_id);
+      if (user.token)
+        sendFCM(
+          user.token,
+          `Order cancellation`,
+          `Your order no. ${orderDetails?.order_id} is cancelled.`,
+          `/order-placed/${orderDetails?.order_id}`
+        );
 
       if (order.affectedRows === 0) {
         APIResponse(

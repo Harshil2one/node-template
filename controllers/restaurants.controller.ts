@@ -10,6 +10,7 @@ import { getSocket } from "../config/socket.config";
 import { INotification } from "../models/notifications.model";
 import { emitToUser } from "../helpers/socket";
 import { USER_ROLE } from "../enums/auth.enum";
+import { getUser, sendFCM } from "../helpers/utils";
 const nodemailer = require("nodemailer");
 
 const getRestaurants: RequestHandler = async (
@@ -782,6 +783,15 @@ const updateRestaurantStatus: RequestHandler = async (
       restaurantDetails,
       notification
     );
+
+    const user = await getUser(restaurantDetails.created_by);
+    if (user.token)
+      sendFCM(
+        user.token,
+        `Restaurant request ${status === "rejected" ? "rejected" : "approved"}`,
+        `Admin actions found.`,
+        `/restaurant`
+      );
 
     APIResponse(
       response,

@@ -13,6 +13,13 @@ import chatRouter from "./chat.route";
 import footerRouter from "./footer.route";
 import csvRouter from "./csv.route";
 import notificationRouter from "./notifications.route";
+import tokenRouter from "./token.route";
+
+import admin from "firebase-admin";
+
+admin.initializeApp({
+  credential: admin.credential.cert(require("../serviceAccountKey.json")),
+});
 
 const swaggerUI = require("swagger-ui-express");
 const swaggerConfig = require("../config/swagger.config");
@@ -48,6 +55,7 @@ export default (app: Application) => {
     app.use(`${BASE_PATH}/custom`, footerRouter);
     app.use(`${BASE_PATH}/csv`, csvRouter);
     app.use(`${BASE_PATH}/notification`, notificationRouter);
+    app.use(`${BASE_PATH}/token`, tokenRouter);
   };
   routes();
 };
