@@ -15,6 +15,9 @@ import csvRouter from "./csv.route";
 import notificationRouter from "./notifications.route";
 import tokenRouter from "./token.route";
 import admin from "firebase-admin";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 admin.initializeApp({
   credential: admin.credential.cert({
