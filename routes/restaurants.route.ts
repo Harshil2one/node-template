@@ -49,9 +49,6 @@ restaurantRouter.param("id", checkRestaurant);
  *                   example: Restaurants fetched successfully!
  *       401:
  *         description: Unauthorized - User can not get restaurants
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 restaurantRouter.route("/").get(getRestaurants);
 
@@ -85,9 +82,6 @@ restaurantRouter.route("/").get(getRestaurants);
  *                   type: object
  *       401:
  *         description: Unauthorized - User can not get restaurant details
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 restaurantRouter.route("/:id").get(getRestaurantById);
 
@@ -121,9 +115,6 @@ restaurantRouter.route("/:id").get(getRestaurantById);
  *                   type: object
  *       401:
  *         description: Unauthorized - User can not get restaurant food items
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 restaurantRouter.route("/food/:id").get(getRestaurantFood);
 
@@ -165,9 +156,6 @@ restaurantRouter.use(validateToken);
  *                   example: Restaurant created successfully!
  *       401:
  *         description: Unauthorized - User can not create restaurants
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 restaurantRouter.route("/").post(validateBody, createRestaurant);
 
@@ -207,9 +195,6 @@ restaurantRouter.route("/book-table").post(bookTable);
  *                   example: Restaurant updated successfully!
  *       401:
  *         description: Unauthorized - User can not update restaurants
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 restaurantRouter.route("/:id").put(validateBody, updateRestaurant);
 
@@ -241,9 +226,6 @@ restaurantRouter.route("/:id").put(validateBody, updateRestaurant);
  *                   example: Restaurant deleted successfully!
  *       401:
  *         description: Unauthorized - User can not delete restaurants
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 restaurantRouter.route("/:id").delete(deleteRestaurantById);
 

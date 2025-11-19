@@ -68,9 +68,6 @@ const {
  *                   example: User successfully registered!
  *       401:
  *         description: Unauthorized - User not registered
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 authRouter.route("/signup").post(signup);
 
@@ -139,9 +136,6 @@ authRouter.route("/signup").post(signup);
  *                              example: 2
  *       401:
  *         description: Unauthorized - User not logged in
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 authRouter.route("/signin").post(signin);
 

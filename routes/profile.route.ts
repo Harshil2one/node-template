@@ -37,9 +37,6 @@ profileRouter.use(validateToken);
  *                   example: Profile details fetched successfully!
  *       401:
  *         description: Unauthorized - User can not fetched
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 profileRouter.route("/:id").get(getProfile);
 
@@ -77,9 +74,6 @@ profileRouter.route("/:id").get(getProfile);
  *                   example: Profile details updated successfully!
  *       401:
  *         description: Unauthorized - User can not get updated
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 profileRouter.route("/:id").patch(updateProfile);
 
@@ -117,9 +111,6 @@ profileRouter.route("/:id").patch(updateProfile);
  *                   example: Address details updated successfully!
  *       401:
  *         description: Unauthorized - User can not get updated
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 profileRouter.route("/address/:id").patch(updateProfileAddress);
 

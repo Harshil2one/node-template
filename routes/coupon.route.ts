@@ -45,9 +45,6 @@ couponRouter.route("/").get(getAllCoupons);
  *                   example: Coupon code applied successfully!
  *       401:
  *         description: Unauthorized - User can not apply same coupon
- *     servers:
- *       - url: http://localhost:8000
- *         description: Local development server
  */
 couponRouter.route("/:userId").post(validateCoupon);
 
