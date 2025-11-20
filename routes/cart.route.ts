@@ -35,6 +35,9 @@ cartRouter.use(validateToken);
  *                   example: Cart items fetched successfully!
  *       401:
  *         description: Unauthorized - User can not get cart items
+ *     servers:
+ *       - url: http://localhost:8000
+ *         description: Local development server
  */
 cartRouter.route("/:userId").get(getCartItems);
 
@@ -66,6 +69,9 @@ cartRouter.route("/:userId").get(getCartItems);
  *                   example: Cart items updated successfully!
  *       401:
  *         description: Unauthorized - User can not get cart items
+ *     servers:
+ *       - url: http://localhost:8000
+ *         description: Local development server
  */
 cartRouter.route("/:userId").put(updateCartItems);
 
