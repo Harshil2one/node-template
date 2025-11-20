@@ -30,7 +30,7 @@ admin.initializeApp({
 const swaggerUI = require("swagger-ui-express");
 const swaggerConfig = require("../config/swagger.config");
 
-const BASE_PATH = process.env.BASE_URL || "/v1/api";
+const BASE_PATH = process.env.BASE_URL || "v1/api";
 
 const appRouter = express.Router();
 
@@ -40,28 +40,28 @@ appRouter.route("/").get((req, res) => {
   res.status(HTTP_STATUS.SUCCESS).send(
     `<div style='display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center;'>
         <h1 style='text-align: center'>Welcome to BigBite Backend</h1>
-        <a href='https://bigbite-be.onrender.com${BASE_PATH}/api-docs' style='border: 1px solid black; padding: 10px 14px; border-radius: 4px; text-decoration: none; color: blue'>View Swagger collection</a>
+        <a href='https://node-template-us8b.onrender.com/${BASE_PATH}/api-docs' style='border: 1px solid black; padding: 10px 14px; border-radius: 4px; text-decoration: none; color: blue'>View Swagger collection</a>
       </div>`
   );
 });
 
 export default (app: Application) => {
   const routes = () => {
-    app.use(`${BASE_PATH}`, appRouter);
-    app.use(`${BASE_PATH}auth`, authRouter);
-    app.use(`${BASE_PATH}restaurants`, restaurantRouter);
-    app.use(`${BASE_PATH}cart`, cartRouter);
-    app.use(`${BASE_PATH}coupon`, couponRouter);
-    app.use(`${BASE_PATH}jobs`, jobsRouter);
-    app.use(`${BASE_PATH}orders`, orderRouter);
-    app.use(`${BASE_PATH}foods`, foodRouter);
-    app.use(`${BASE_PATH}profile`, profileRouter);
-    app.use(`${BASE_PATH}riders`, riderRouter);
-    app.use(`${BASE_PATH}chat`, chatRouter);
-    app.use(`${BASE_PATH}custom`, footerRouter);
-    app.use(`${BASE_PATH}csv`, csvRouter);
-    app.use(`${BASE_PATH}notification`, notificationRouter);
-    app.use(`${BASE_PATH}token`, tokenRouter);
+    app.use(`${BASE_PATH}/`, appRouter);
+    app.use(`${BASE_PATH}/auth`, authRouter);
+    app.use(`${BASE_PATH}/restaurants`, restaurantRouter);
+    app.use(`${BASE_PATH}/cart`, cartRouter);
+    app.use(`${BASE_PATH}/coupon`, couponRouter);
+    app.use(`${BASE_PATH}/jobs`, jobsRouter);
+    app.use(`${BASE_PATH}/orders`, orderRouter);
+    app.use(`${BASE_PATH}/foods`, foodRouter);
+    app.use(`${BASE_PATH}/profile`, profileRouter);
+    app.use(`${BASE_PATH}/riders`, riderRouter);
+    app.use(`${BASE_PATH}/chat`, chatRouter);
+    app.use(`${BASE_PATH}/custom`, footerRouter);
+    app.use(`${BASE_PATH}/csv`, csvRouter);
+    app.use(`${BASE_PATH}/notification`, notificationRouter);
+    app.use(`${BASE_PATH}/token`, tokenRouter);
   };
   routes();
 };
