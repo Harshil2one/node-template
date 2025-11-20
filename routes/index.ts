@@ -40,7 +40,7 @@ appRouter.route("/").get((req, res) => {
   res.status(HTTP_STATUS.SUCCESS).send(
     `<div style='display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center;'>
         <h1 style='text-align: center'>Welcome to BigBite Backend</h1>
-        <a href='https://bigbite-be.onrender.com${BASE_PATH}/api-docs' style='border: 1px solid black; padding: 10px 14px; border-radius: 4px; text-decoration: none; color: blue'>View Swagger collection</a>
+        <a href='https://bigbite-be.onrender.com/${BASE_PATH}/api-docs' style='border: 1px solid black; padding: 10px 14px; border-radius: 4px; text-decoration: none; color: blue'>View Swagger collection</a>
       </div>`
   );
 });
