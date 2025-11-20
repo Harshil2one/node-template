@@ -30,7 +30,7 @@ admin.initializeApp({
 const swaggerUI = require("swagger-ui-express");
 const swaggerConfig = require("../config/swagger.config");
 
-const BASE_PATH = process.env.BASE_URL || "";
+const BASE_PATH = process.env.BASE_URL || "/";
 
 const appRouter = express.Router();
 
