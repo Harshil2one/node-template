@@ -5,7 +5,7 @@ import runStandardMiddleware from "./middlewares/standard.middleware";
 import { initializeSocket } from "./config/socket.config";
 
 const app: Express = express();
-const port = process.env.PORT || 8000;
+const port = process.env.PORT;
 
 runStandardMiddleware(app);
 
@@ -17,7 +17,9 @@ const startServer = async () => {
 
   const { server } = initializeSocket(app);
   server.listen(port, "0.0.0.0", () => {
-    console.log(`Server is running on port: ${port}`);
+    console.log(
+      `Server is running on port: ${port}/${process.env.BASE_URL}`
+    );
   });
 };
 
