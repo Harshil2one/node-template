@@ -14,7 +14,10 @@ import footerRouter from "./footer.route";
 import csvRouter from "./csv.route";
 import notificationRouter from "./notifications.route";
 import tokenRouter from "./token.route";
+import dotenv from "dotenv";
+
 import admin from "firebase-admin";
+dotenv.config();
 
 admin.initializeApp({
   credential: admin.credential.cert({
@@ -27,7 +30,7 @@ admin.initializeApp({
 const swaggerUI = require("swagger-ui-express");
 const swaggerConfig = require("../config/swagger.config");
 
-const BASE_PATH = process.env.BASE_URL || "/";
+const BASE_PATH = process.env.BASE_URL || "/v1/api";
 
 const appRouter = express.Router();
 
