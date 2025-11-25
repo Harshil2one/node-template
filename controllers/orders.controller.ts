@@ -205,6 +205,7 @@ const getOrderByOrderId: RequestHandler = async (
       pickup_by: {
         id: user?.id,
         name: user?.name,
+        image: user?.image,
       },
     };
 
@@ -300,13 +301,24 @@ const getRideRequests: RequestHandler = async (
   response: Response,
   next: NextFunction
 ) => {
+  const { filter } = await request.query;
   try {
-    const [orders] = (await db.query(
-      "SELECT * FROM orders WHERE payment_status = ? AND (order_status = ? OR order_status = ?) ORDER BY order_status ASC",
-      ["paid", ORDER_STATUS.OUT_FOR_DELIVERY, ORDER_STATUS.DELIVERED]
-    )) as any;
+    let orders: any = [];
+    if (filter === "all") {
+      const [data] = (await db.query(
+        "SELECT * FROM orders WHERE payment_status = ? AND (order_status = ? OR order_status = ?) ORDER BY order_status ASC",
+        ["paid", ORDER_STATUS.OUT_FOR_DELIVERY, ORDER_STATUS.DELIVERED]
+      )) as any;
+      orders = data;
+    } else {
+      const [data] = (await db.query(
+        "SELECT * FROM orders WHERE payment_status = ? AND pickup_by = ? AND (order_status = ? OR order_status = ?) ORDER BY order_status ASC",
+        ["paid", filter, ORDER_STATUS.OUT_FOR_DELIVERY, ORDER_STATUS.DELIVERED]
+      )) as any;
+      orders = data;
+    }
 
-    if (!orders) {
+    if (orders?.length === 0) {
       return APIResponse(
         response,
         false,
@@ -346,6 +358,7 @@ const getRideRequests: RequestHandler = async (
         pickup_by: {
           id: user?.id,
           name: user?.name,
+          image: user?.image,
         },
       };
     });
@@ -426,12 +439,48 @@ const updateOrderStatus: RequestHandler = async (
           `Order: ${enrichedOrder.order_id} has been delivered.`,
           `/order-placed/${enrichedOrder.order_id}`
         );
+
+      const restOfRiders = await getUsers(USER_ROLE.RIDER, pickupBy, "no");
+      const pickupRider = await getUser(pickupBy);
+      emitToUser(io, restOfRiders, "picked_up", {
+        ...data,
+        pickup_by: {
+          id: pickupRider?.id,
+          name: pickupRider?.name,
+          image: pickupRider?.image,
+        },
+      });
     } else if (pickupBy) {
-      const [updatedOrder] = (await db.query(
-        "UPDATE orders SET pickup_by = ?, pickup_time = ? WHERE id = ?",
-        [pickupBy, Date.now() / 1000, orderId]
-      )) as unknown as [IOrder];
-      order = updatedOrder;
+      const [[data0]] = (await db.query("SELECT * FROM orders WHERE id = ?", [
+        orderId,
+      ])) as unknown as [[IOrder]];
+      if (!data0?.pickup_by) {
+        const [updatedOrder] = (await db.query(
+          "UPDATE orders SET pickup_by = ?, pickup_time = ? WHERE id = ?",
+          [pickupBy, Date.now() / 1000, orderId]
+        )) as unknown as [IOrder];
+        order = updatedOrder;
+        const [[data]] = (await db.query("SELECT * FROM orders WHERE id = ?", [
+          orderId,
+        ])) as unknown as [[IOrder]];
+        const restOfRiders = await getUsers(USER_ROLE.RIDER, pickupBy, "no");
+        const pickupRider = await getUser(pickupBy);
+        emitToUser(io, restOfRiders, "picked_up", {
+          ...data,
+          pickup_by: {
+            id: pickupRider?.id,
+            name: pickupRider?.name,
+            image: pickupRider?.image,
+          },
+        });
+      } else {
+        return APIResponse(
+          response,
+          false,
+          HTTP_STATUS.BAD_REQUEST,
+          "Already picked up!"
+        );
+      }
     } else {
       const [updatedOrder] = (await db.query(
         "UPDATE orders SET order_status = ? WHERE id = ?",
@@ -597,7 +646,6 @@ const createOrder: RequestHandler = async (
   response: Response,
   next: NextFunction
 ) => {
-  const { io } = getSocket();
   try {
     const { userId, amount, orderInfo } = request.body;
     const { email, restaurant, food } = orderInfo;
@@ -688,99 +736,6 @@ const createOrder: RequestHandler = async (
   </div>
   `,
         });
-        const [[data]] = (await db.query("SELECT * FROM orders WHERE id = ?", [
-          orderEntry.insertId,
-        ])) as unknown as [[IOrder]];
-
-        const notification1 = {
-          message: `You ordered from ${restaurantDetails?.name}.`,
-          receiver: JSON.stringify([userId]),
-          link: `/order-placed/${id}`,
-          created_at: Date.now() / 1000,
-        };
-
-        (await db.query(
-          "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
-          [
-            notification1.message,
-            notification1.receiver,
-            notification1.link,
-            notification1.created_at,
-          ]
-        )) as unknown as [INotification];
-
-        emitToUser(io, userId, "place_order", data, notification1);
-
-        const user1 = await getUser(data.user_id);
-        if (user1.token)
-          sendFCM(
-            user1.token,
-            `Order placed`,
-            `You ordered from ${restaurantDetails?.name}.`,
-            `/order-placed/${id}`
-          );
-
-        const [users] = (await db.query(
-          "SELECT * FROM users WHERE role = ? AND id = ?",
-          [USER_ROLE.OWNER, restaurantDetails?.created_by]
-        )) as any;
-        const notificationUsers = users?.map((user: IUser) => user?.id);
-
-        const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
-          data.food,
-        ])) as any;
-
-        const [[restaurant]] = (await db.query(
-          "SELECT * FROM restaurants WHERE id = ?",
-          data.restaurant
-        )) as any;
-
-        const foodIds = data.food;
-        const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
-        const food = orderFoods.map((f: IFood) => ({
-          ...f,
-          count: foodIds.filter((id: number) => id === f.id).length,
-        }));
-
-        const enrichedOrder = {
-          ...data,
-          food,
-          restaurant,
-        };
-
-        const notification2 = {
-          message: `New order: #${enrichedOrder.order_id} arrived at your restaurant.`,
-          receiver: JSON.stringify(notificationUsers),
-          link: `/order-requests`,
-          created_at: Date.now() / 1000,
-        };
-
-        (await db.query(
-          "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
-          [
-            notification2.message,
-            notification2.receiver,
-            notification2.link,
-            notification2.created_at,
-          ]
-        )) as unknown as [INotification];
-
-        emitToUser(
-          io,
-          notificationUsers,
-          "receive_order",
-          enrichedOrder,
-          notification2
-        );
-
-        const user2 = await getUser(data.user_id);
-        if (user2.token)
-          sendFCM(
-            user2.token,
-            `New order`,
-            `Order: #${enrichedOrder.order_id} arrived at your restaurant.`,
-            `/order-requests`
-          );
 
         APIResponse(
           response,
@@ -902,6 +857,7 @@ const capturePayment: RequestHandler = async (
   next: NextFunction
 ) => {
   const { order_id, payment_id } = request.body;
+  const { io } = getSocket();
 
   if (
     process.env.RAZORPAY_KEY_SECRET === request.headers["x-razorpay-signature"]
@@ -910,8 +866,114 @@ const capturePayment: RequestHandler = async (
       "UPDATE orders SET payment_status = ?, payment_id = ? WHERE order_id = ?",
       ["paid", payment_id, order_id]
     )) as unknown as [IOrder];
-    if (updateOrder?.affectedRows && updateOrder?.affectedRows > 0)
+    const [[orderDetails]] = (await db.query(
+      "SELECT * FROM orders WHERE order_id = ?",
+      order_id
+    )) as unknown as [[IOrder]];
+    if (updateOrder?.affectedRows && updateOrder?.affectedRows > 0) {
+      const [[restaurantDetails]] = (await db.query(
+        "SELECT * FROM restaurants WHERE id = ?",
+        [orderDetails.restaurant]
+      )) as unknown as [[IRestaurant]];
+
+      const notification1 = {
+        message: `You ordered from ${restaurantDetails?.name}.`,
+        receiver: JSON.stringify([orderDetails.user_id]),
+        link: `/order-placed/${order_id}`,
+        created_at: Date.now() / 1000,
+      };
+
+      (await db.query(
+        "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
+        [
+          notification1.message,
+          notification1.receiver,
+          notification1.link,
+          notification1.created_at,
+        ]
+      )) as unknown as [INotification];
+
+      emitToUser(
+        io,
+        orderDetails.user_id,
+        "place_order",
+        orderDetails,
+        notification1
+      );
+
+      const user1 = await getUser(orderDetails.user_id);
+      if (user1.token)
+        sendFCM(
+          user1.token,
+          `Order placed`,
+          `You ordered from ${restaurantDetails?.name}.`,
+          `/order-placed/${order_id}`
+        );
+
+      const [users] = (await db.query(
+        "SELECT * FROM users WHERE role = ? AND id = ?",
+        [USER_ROLE.OWNER, restaurantDetails?.created_by]
+      )) as any;
+      const notificationUsers = users?.map((user: IUser) => user?.id);
+
+      const [foods] = (await db.query("SELECT * FROM foods WHERE id IN (?)", [
+        orderDetails.food,
+      ])) as any;
+
+      const [[restaurant]] = (await db.query(
+        "SELECT * FROM restaurants WHERE id = ?",
+        orderDetails.restaurant
+      )) as any;
+
+      const foodIds = orderDetails.food;
+      const orderFoods = foods.filter((f: IFood) => foodIds.includes(f.id));
+      const food = orderFoods.map((f: IFood) => ({
+        ...f,
+        count: foodIds.filter((id: number) => id === f.id).length,
+      }));
+
+      const enrichedOrder = {
+        ...orderDetails,
+        food,
+        restaurant,
+      };
+
+      const notification2 = {
+        message: `New order: #${order_id} arrived at your restaurant.`,
+        receiver: JSON.stringify(notificationUsers),
+        link: `/order-requests`,
+        created_at: Date.now() / 1000,
+      };
+
+      (await db.query(
+        "INSERT INTO notifications (message, receiver, link, created_at) VALUES (?, ?, ?, ?)",
+        [
+          notification2.message,
+          notification2.receiver,
+          notification2.link,
+          notification2.created_at,
+        ]
+      )) as unknown as [INotification];
+
+      emitToUser(
+        io,
+        notificationUsers,
+        "receive_order",
+        enrichedOrder,
+        notification2
+      );
+
+      const user2 = await getUser(notificationUsers?.[0]);
+      if (user2.token)
+        sendFCM(
+          user2.token,
+          `New order`,
+          `Order: #${order_id} arrived at your restaurant.`,
+          `/order-requests`
+        );
+
       APIResponse(response, true, HTTP_STATUS.SUCCESS, "Payment received!");
+    }
   } else {
     APIResponse(response, true, HTTP_STATUS.SUCCESS, "Something went wrong");
     return next("Something went wrong");

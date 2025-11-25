@@ -10,11 +10,21 @@ export const getUser = async (id: number): Promise<IUser> => {
   return user;
 };
 
-export const getUsers = async (role: USER_ROLE, id?: number) => {
+export const getUsers = async (
+  role: USER_ROLE,
+  id?: number,
+  includeId: "yes" | "no" = "yes"
+) => {
   let users = [];
-  if (id) {
+  if (id && includeId === "yes") {
     const [data] = (await db.query(
       "SELECT * FROM users WHERE role = ? AND id = ?",
+      [role, id]
+    )) as any;
+    users = data;
+  } else if (id && includeId === "no") {
+    const [data] = (await db.query(
+      "SELECT * FROM users WHERE role = ? AND NOT id = ?",
       [role, id]
     )) as any;
     users = data;

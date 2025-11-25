@@ -2,7 +2,7 @@ import { Request, Response, RequestHandler, NextFunction } from "express";
 import { HTTP_STATUS } from "../enums/status.enum";
 import { APIResponse } from "../helpers/apiResponse";
 import db from "../config/db.config";
-import { IRestaurant } from "../models/restaurants.model";
+import { IBooking, IRestaurant } from "../models/restaurants.model";
 import { ORDER_STATUS } from "../enums/restaurants.enum";
 import { IOrder } from "../models/orders.model";
 import { IUser } from "../models/auth.model";
@@ -40,6 +40,11 @@ const getRestaurants: RequestHandler = async (
     } else if (filters && filters?.length > 0) {
       let baseQuery = "SELECT * FROM restaurants WHERE 1=1";
       const params: any[] = [];
+
+      if (mode) {
+        baseQuery += " AND mode = ?";
+        params.push(mode);
+      }
 
       if (filters?.includes("offers")) {
         baseQuery += " AND JSON_LENGTH(offers) > 0";
@@ -184,6 +189,7 @@ const getRestaurantFood: RequestHandler = async (
   next: NextFunction
 ) => {
   const { id } = await request.params;
+  const { filter } = await request.query;
   try {
     const [[restaurant]] = (await db.query(
       "SELECT * FROM restaurants WHERE id = ?",
@@ -198,10 +204,20 @@ const getRestaurantFood: RequestHandler = async (
         "Restaurant is not able to provide service!"
       );
     }
+    let cart: any = [];
 
-    const [cart] = await db.query("SELECT * FROM foods WHERE id IN (?)", [
-      restaurant.food,
-    ]);
+    if (filter) {
+      const [data] = await db.query(
+        "SELECT * FROM foods WHERE id IN (?) AND type = ?",
+        [restaurant.food, filter]
+      );
+      cart = data;
+    } else {
+      const [data] = await db.query("SELECT * FROM foods WHERE id IN (?)", [
+        restaurant.food,
+      ]);
+      cart = data;
+    }
 
     APIResponse(
       response,
@@ -483,7 +499,7 @@ const bookTable: RequestHandler = async (
 ): Promise<void> => {
   try {
     const reqBody = await request.body;
-    const { restaurantId, email } = reqBody;
+    const { restaurantId, email, persons, time } = reqBody;
 
     if (!restaurantId) {
       APIResponse(
@@ -512,6 +528,8 @@ const bookTable: RequestHandler = async (
       return;
     }
 
+    const tableNumber = Math.floor(Math.random() * 100 + 10);
+
     const testAccount = await nodemailer.createTestAccount();
 
     const transporter = nodemailer.createTransport({
@@ -539,17 +557,33 @@ const bookTable: RequestHandler = async (
       </div>
 
       <div style="padding: 30px;">
-        <h3 style="color: #333;">Booking Confirmation Of Your Table</h3>
+        <h3 style="color: #333;">Table Booking Confirmation</h3>
         <p style="color: #555; font-size: 15px; line-height: 1.6;">
-          Your table booking is confirmed at <span style="color: #ff4b2b">${
-            restaurant.name
-          }</span> via <b>Big Bite</b>. Below is your table code:
+          Your table booking is confirmed via <b>Big Bite</b>. Below is your booking details:
         </p>
 
-        <div style="margin: 25px 0;">
-          <span style="font-size: 32px; color: #ff4b2b; font-weight: bold;">${Math.floor(
-            Math.random() * 100 + 10
-          )}</span>
+        <div style="margin: 25px 0; border: 1px solid black; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; justify-content: start; align-items: start;">
+          <div style="padding: 8px 0;">
+            <span style="font-size: 18px;">Restaurant: </span>
+            <span style="font-size: 18px; color: #ff4b2b;">${
+              restaurant.name
+            }</span>
+          </div>
+
+          <div style="padding: 8px 0;">
+            <span style="font-size: 18px;">Table: </span>
+            <span style="font-size: 18px; color: #ff4b2b;">${tableNumber}</span>
+          </div>
+
+          <div style="padding: 8px 0;">
+            <span style="font-size: 16px;">Persons: </span>
+            <span style="font-size: 16px; color: #ff4b2b;">${persons}</span>
+          </div>
+
+          <div style="padding: 8px 0;">
+            <span style="font-size: 16px;">Time: </span>
+            <span style="font-size: 16px; color: #ff4b2b;">${time}</span>
+          </div>
         </div>
 
         <p style="color: #777; font-size: 14px;">
@@ -569,12 +603,26 @@ const bookTable: RequestHandler = async (
   `,
       });
 
+      const [booking] = (await db.query(
+        "INSERT INTO bookings (table_number, restaurant_id, user_id, persons, time, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        [tableNumber, restaurantId, user.id, persons, time, Date.now() / 1000]
+      )) as unknown as [IBooking];
+
+      if (booking.affectedRows === 0) {
+        return APIResponse(
+          response,
+          false,
+          HTTP_STATUS.BAD_REQUEST,
+          "Error booking table!"
+        );
+      }
+
       APIResponse(
         response,
         true,
         HTTP_STATUS.SUCCESS,
         "Table booked successfully!",
-        { preview: nodemailer.getTestMessageUrl(info) }
+        { booking, preview: nodemailer.getTestMessageUrl(info) }
       );
     })();
   } catch (error: unknown) {

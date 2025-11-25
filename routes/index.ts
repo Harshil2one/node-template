@@ -14,11 +14,19 @@ import footerRouter from "./footer.route";
 import csvRouter from "./csv.route";
 import notificationRouter from "./notifications.route";
 import tokenRouter from "./token.route";
+import timeSlotRouter from "./timeSlot.route";
+import dotenv from "dotenv";
 
 import admin from "firebase-admin";
 
+dotenv.config();
+
 admin.initializeApp({
-  credential: admin.credential.cert(require("../serviceAccountKey.json")),
+  credential: admin.credential.cert({
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    projectId: process.env.FIREBASE_PROJECT_ID,
+  }),
 });
 
 const swaggerUI = require("swagger-ui-express");
@@ -56,6 +64,7 @@ export default (app: Application) => {
     app.use(`${BASE_PATH}/csv`, csvRouter);
     app.use(`${BASE_PATH}/notification`, notificationRouter);
     app.use(`${BASE_PATH}/token`, tokenRouter);
+    app.use(`${BASE_PATH}/time-slots`, timeSlotRouter);
   };
   routes();
 };

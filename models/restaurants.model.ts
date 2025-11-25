@@ -35,3 +35,14 @@ export interface IFood {
   ratingsCount: number;
   affectedRows?: number;
 }
+
+export interface IBooking {
+  readonly id: number;
+  table_number: number;
+  restaurant_id: number;
+  user_id: number;
+  persons: number;
+  time: string;
+  created_at: string;
+  affectedRows?: number;
+}
